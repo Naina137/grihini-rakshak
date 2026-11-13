@@ -1,48 +1,41 @@
-"""
-SENTINEL AI - Autonomous Room Safety Guardian
-Configuration and runtime parameters
-"""
 import os
-from typing import List, Dict, Any
-from pydantic import BaseModel
 
-class AppSettings(BaseModel):
-    APP_NAME: str = "SENTINEL AI"
+class Settings:
+    PROJECT_NAME: str = "SENTINEL AI"
     TAGLINE: str = "Your Room. Your Safety. Your AI Guardian."
     VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    API_V1_PREFIX: str = "/api/v1"
     
-    # Active monitoring zone
-    DEFAULT_ROOM_ID: str = "ROOM-ALPHA-01"
-    DEFAULT_ROOM_NAME: str = "Living Area & Home Office"
+    # Storage & DB
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///sentinel.db")
     
-    # Risk Engine Thresholds
+    # Server
+    HOST: str = os.getenv("HOST", "127.0.0.1")
+    PORT: int = int(os.getenv("PORT", "8080"))
+    
+    # Vision Settings
     FIRE_CONFIDENCE_THRESHOLD: float = 0.65
     SMOKE_CONFIDENCE_THRESHOLD: float = 0.55
-    GLASS_BREAK_THRESHOLD: float = 0.70
-    ALARM_SOUND_THRESHOLD: float = 0.68
-    SCREAM_THRESHOLD: float = 0.65
-    IMPACT_THRESHOLD: float = 0.75
-    MOTION_THRESHOLD: float = 0.40
+    MOTION_SENSITIVITY: float = 0.30
+    FLICKER_MIN_HZ: float = 3.0
+    FLICKER_MAX_HZ: float = 18.0
     
-    # Environmental Thresholds (Simulation mode)
-    TEMP_WARNING_CELSIUS: float = 45.0
-    TEMP_CRITICAL_CELSIUS: float = 60.0
-    SMOKE_PPM_WARNING: float = 120.0
-    SMOKE_PPM_CRITICAL: float = 300.0
-    GAS_PPM_WARNING: float = 250.0
-    GAS_PPM_CRITICAL: float = 600.0
+    # Audio Settings
+    AUDIO_SAMPLE_RATE: int = 22050
+    ALARM_FREQ_MIN: int = 2800
+    ALARM_FREQ_MAX: int = 3400
+    GLASS_CENTROID_MIN: int = 4200
+    SCREAM_PITCH_MIN: int = 500
+    SCREAM_PITCH_MAX: int = 3200
     
-    # Temporal Verification (consecutive positive detections required to avoid false positives)
-    TEMPORAL_VERIFICATION_FRAMES: int = 3
-    TEMPORAL_AUDIO_CHUNKS: int = 2
+    # Temporal & Risk Engine
+    TEMPORAL_WINDOW_SECONDS: int = 4
+    CRITICAL_CONFIRMATION_FRAMES: int = 2
     
-    # Privacy Settings
-    LOCAL_PROCESSING_ONLY: bool = True
-    ALLOW_RAW_AUDIO_STORAGE: bool = False  # NEVER store raw audio unnecessarily
-    ALLOW_RAW_FRAME_STORAGE: bool = False  # Ephemeral memory only
-    
-    # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./sentinel.db")
+    # Simulated Environment Defaults
+    SIM_DEFAULT_TEMP_C: float = 23.5
+    SIM_DEFAULT_HUMIDITY_PCT: float = 48.0
+    SIM_DEFAULT_SMOKE_PPM: float = 1.2
+    SIM_DEFAULT_GAS_PPM: float = 4.0
 
-settings = AppSettings()
+settings = Settings()

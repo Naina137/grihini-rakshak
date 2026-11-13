@@ -1,0 +1,14 @@
+import uvicorn
+import sys
+import os
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+if __name__ == "__main__":
+    print("=" * 65)
+    print("  SENTINEL AI - INDOOR AI SAFETY GUARDIAN")
+    print("  'Your Room. Your Safety. Your AI Guardian.'")
+    print("  FastAPI Server starting on http://127.0.0.1:8080")
+    print("=" * 65)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8080, reload=False)

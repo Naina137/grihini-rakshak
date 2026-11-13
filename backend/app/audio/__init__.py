@@ -1,4 +1,4 @@
-from app.audio.audio_classifier import audio_classifier
-from app.audio.audio_processor import audio_processor
+from .classifier import acoustic_classifier, AcousticClassifier
+from .features import audio_feature_extractor, AudioFeatureExtractor
 
-__all__ = ["audio_classifier", "audio_processor"]
+__all__ = ["acoustic_classifier", "AcousticClassifier", "audio_feature_extractor", "AudioFeatureExtractor"]

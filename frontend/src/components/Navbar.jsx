@@ -1,140 +1,154 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, ShieldAlert, ShieldCheck, Eye, EyeOff, Radio, Clock, MapPin, Power } from 'lucide-react';
-import { APP_NAME, TAGLINE } from '../utils/constants';
+import React from 'react';
+import { Shield, Eye, AlertTriangle, Activity, Sliders, ShieldAlert, Power, Radio } from 'lucide-react';
 
 export default function Navbar({
+  activeTab,
+  setActiveTab,
+  riskLevel = 'NORMAL',
   isMonitoring,
-  onToggleMonitoring,
-  currentRiskLevel,
-  activeRoom,
-  onChangeRoom,
-  wsConnected
+  toggleMonitoring,
+  roomName,
+  alertCount = 0
 }) {
-  const [timeStr, setTimeStr] = useState('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const d = new Date();
-      setTimeStr(d.toLocaleTimeString([], { hour12: false }));
-    };
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const getRiskBadge = () => {
-    if (!isMonitoring) {
-      return (
-        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
-          <EyeOff className="w-3.5 h-3.5" />
-          STANDBY
-        </span>
-      );
-    }
-    switch (currentRiskLevel) {
+    switch (riskLevel) {
       case 'CRITICAL':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/50 glow-red animate-pulse-fast">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            CRITICAL THREAT
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-950/90 text-red-400 border border-red-500 shadow-lg shadow-red-500/20 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+            CRITICAL RISK
           </span>
         );
       case 'HIGH RISK':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-500/20 text-orange-400 border border-orange-500/50 glow-orange animate-pulse">
-            <ShieldAlert className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-950/90 text-orange-400 border border-orange-500 shadow-lg shadow-orange-500/20">
+            <span className="w-2 h-2 rounded-full bg-orange-500" />
             HIGH RISK
           </span>
         );
       case 'WARNING':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/40 glow-orange">
-            <ShieldAlert className="w-3.5 h-3.5" />
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-950/90 text-amber-300 border border-amber-500/60">
+            <span className="w-2 h-2 rounded-full bg-amber-400" />
             WARNING
           </span>
         );
       default:
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 glow-green">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            SURVEILLANCE NORMAL
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950/90 text-emerald-400 border border-emerald-500/40">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            SYSTEM NORMAL
           </span>
         );
     }
   };
 
+  const navItems = [
+    { id: 'dashboard', label: 'Live Monitor', icon: Eye },
+    { id: 'alerts', label: 'Alert History', icon: ShieldAlert, badge: alertCount },
+    { id: 'simulation', label: 'Environmental Sim', icon: Sliders },
+    { id: 'testing', label: 'Testing Lab', icon: Activity },
+    { id: 'settings', label: 'Contacts & Config', icon: Radio },
+  ];
+
   return (
-    <header className="h-16 border-b border-cyan-500/15 bg-[#0B0F19]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40">
-      {/* Brand & Tagline */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/30 border border-cyan-400/40 glow-cyan">
-          <Shield className="w-5 h-5 text-cyan-400" />
-          {isMonitoring && (
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-cyan-400 animate-ping" />
-          )}
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-extrabold tracking-wider bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-400 bg-clip-text text-transparent">
-              {APP_NAME}
-            </h1>
-            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
-              v1.0 AI
-            </span>
+    <header className="sticky top-0 z-40 w-full glass-panel-elevated border-b border-cyan-500/20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          
+          {/* Brand & Tagline */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-400/40 shadow-lg shadow-cyan-500/20">
+              <Shield className="w-6 h-6 text-cyan-400" />
+              {isMonitoring && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500" />
+                </span>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-extrabold tracking-wider bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-300 bg-clip-text text-transparent">
+                  SENTINEL AI
+                </h1>
+                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-cyan-900/60 text-cyan-300 border border-cyan-700/50">
+                  v1.0 Software
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                Your Room. Your Safety. Your AI Guardian.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-400 hidden sm:block">
-            {TAGLINE}
-          </p>
+
+          {/* Navigation Tabs */}
+          <nav className="hidden md:flex items-center gap-1 bg-navy-950/60 p-1 rounded-xl border border-slate-800">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{item.label}</span>
+                  {item.badge > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-red-500 text-white">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Right Status & Kill Switch */}
+          <div className="flex items-center gap-3">
+            {getRiskBadge()}
+
+            <button
+              onClick={toggleMonitoring}
+              title={isMonitoring ? "Click to stop monitoring (Privacy Mode)" : "Click to start AI Guardian monitoring"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-md ${
+                isMonitoring
+                  ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/50 hover:border-red-400'
+                  : 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/50 hover:border-cyan-400'
+              }`}
+            >
+              <Power className={`w-3.5 h-3.5 ${isMonitoring ? 'text-red-400' : 'text-cyan-400'}`} />
+              <span className="hidden sm:inline">
+                {isMonitoring ? 'STOP GUARD' : 'ARM GUARD'}
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Middle: Zone Selector & Risk Badge */}
-      <div className="hidden md:flex items-center gap-4">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
-          <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-slate-400">Zone:</span>
-          <select 
-            value={activeRoom}
-            onChange={(e) => onChangeRoom(e.target.value)}
-            className="bg-transparent text-cyan-300 font-medium focus:outline-none cursor-pointer"
-          >
-            <option value="Living Area & Home Office" className="bg-slate-900 text-slate-100">Living Area & Office</option>
-            <option value="Server Room Alpha" className="bg-slate-900 text-slate-100">Server Room Alpha</option>
-            <option value="Master Bedroom Suite" className="bg-slate-900 text-slate-100">Master Bedroom Suite</option>
-            <option value="Laboratory Cleanroom" className="bg-slate-900 text-slate-100">Laboratory Cleanroom</option>
-          </select>
+        {/* Mobile Navigation bar */}
+        <div className="flex md:hidden items-center justify-around py-2 border-t border-slate-800/80">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex flex-col items-center gap-1 text-[10px] ${
+                  isActive ? 'text-cyan-400 font-bold' : 'text-slate-400'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{item.label.split(' ')[0]}</span>
+              </button>
+            );
+          })}
         </div>
-
-        {getRiskBadge()}
-      </div>
-
-      {/* Right: Telemetry status, clock & Master Killswitch */}
-      <div className="flex items-center gap-3">
-        {/* WS Link */}
-        <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-400 font-mono">
-          <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-cyan-400 glow-cyan' : 'bg-red-500'}`} />
-          {wsConnected ? 'LINK LIVE' : 'CONNECTING'}
-        </div>
-
-        {/* Live Clock */}
-        <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-300 font-mono px-2.5 py-1 rounded bg-slate-900/80 border border-slate-800">
-          <Clock className="w-3.5 h-3.5 text-cyan-400" />
-          <span>{timeStr}</span>
-        </div>
-
-        {/* Master Monitoring Killswitch Button */}
-        <button
-          onClick={onToggleMonitoring}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-300 shadow-lg cursor-pointer ${
-            isMonitoring
-              ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/40 glow-red'
-              : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-extrabold hover:from-cyan-400 hover:to-blue-500 glow-cyan'
-          }`}
-          title={isMonitoring ? "Stop All Monitoring Tracks (Privacy Protection)" : "Activate Live Room Surveillance"}
-        >
-          <Power className="w-4 h-4" />
-          <span>{isMonitoring ? 'STOP SURVEILLANCE' : 'START SURVEILLANCE'}</span>
-        </button>
       </div>
     </header>
   );

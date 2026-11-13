@@ -1,271 +1,221 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
-import Sidebar from './components/Sidebar';
-import LiveMonitor from './components/LiveMonitor';
-import RiskGauge from './components/RiskGauge';
-import AudioSpectrogram from './components/AudioSpectrogram';
-import EnvironmentalSensors from './components/EnvironmentalSensors';
+import LiveCameraCard from './components/LiveCameraCard';
+import AudioMonitorCard from './components/AudioMonitorCard';
+import RiskEngineCard from './components/RiskEngineCard';
+import EnvironmentalSimulationCard from './components/EnvironmentalSimulationCard';
 import CriticalAlertModal from './components/CriticalAlertModal';
-import AlertHistory from './components/AlertHistory';
-import EmergencyContacts from './components/EmergencyContacts';
-import TestingCenter from './components/TestingCenter';
-import SettingsView from './components/SettingsView';
-
-import { useCamera } from './hooks/useCamera';
-import { useMicrophone } from './hooks/useMicrophone';
-import { useSentinelSocket } from './hooks/useSentinelSocket';
-import { API_BASE } from './utils/constants';
+import AlertHistoryTab from './components/AlertHistoryTab';
+import TestingLabTab from './components/TestingLabTab';
+import SettingsTab from './components/SettingsTab';
+import { fetchAlerts, fetchContacts, fetchSimulationStatus, dismissCriticalModal } from './services/api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isMonitoring, setIsMonitoring] = useState(false);
-  const [activeRoom, setActiveRoom] = useState("Living Area & Home Office");
+  const [isMonitoring, setIsMonitoring] = useState(true);
+  const [roomName, setRoomName] = useState('Living Room - Unit 4B');
+  
+  // Real-time telemetry state
+  const [riskData, setRiskData] = useState({
+    risk_level: 'NORMAL',
+    risk_score: 8.0,
+    hazards: [],
+    recommended_action: 'ENVIRONMENT SECURE - CONTINUOUS GUARDIAN MONITORING ACTIVE',
+    evidence: {}
+  });
+  const [visionData, setVisionData] = useState(null);
+  const [audioData, setAudioData] = useState(null);
+  const [simData, setSimData] = useState(null);
+  const [activeCriticalAlert, setActiveCriticalAlert] = useState(null);
+  const [recentAlertsCount, setRecentAlertsCount] = useState(0);
+  const [contacts, setContacts] = useState([]);
 
-  // Telemetry state from backend
-  const [riskState, setRiskState] = useState(null);
-  const [activeAlertModal, setActiveAlertModal] = useState(null);
-  const [alertStats, setAlertStats] = useState({ total_alerts: 0, unacknowledged_count: 0 });
+  // Load initial contacts, alerts and simulation status
+  useEffect(() => {
+    async function init() {
+      try {
+        const [cRes, aRes, sRes] = await Promise.all([
+          fetchContacts().catch(() => ({ contacts: [] })),
+          fetchAlerts(10).catch(() => ({ alerts: [], active_critical: null })),
+          fetchSimulationStatus().catch(() => ({ readings: null }))
+        ]);
 
-  // Hooks
-  const camera = useCamera();
-  const mic = useMicrophone();
+        if (cRes?.contacts) setContacts(cRes.contacts);
+        if (aRes?.alerts) setRecentAlertsCount(aRes.alerts.filter(a => !a.acknowledged).length);
+        if (aRes?.active_critical) setActiveCriticalAlert(aRes.active_critical);
+        if (sRes?.readings) setSimData(sRes.readings);
 
-  // Alert & Telemetry callbacks
-  const handleNewAlert = useCallback((alertData) => {
-    setActiveAlertModal(alertData);
-    fetchStats();
+        // Request browser Notification permission for emergency alerts
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      } catch (err) {
+        console.warn('Initial load error:', err);
+      }
+    }
+    init();
   }, []);
 
-  const handleTelemetryUpdate = useCallback((data) => {
-    setRiskState(data);
-    // If telemetry shows CRITICAL or HIGH RISK, trigger modal if not already active
-    if ((data.risk_level === 'CRITICAL' || data.risk_level === 'HIGH RISK') && data.active_hazards && data.active_hazards.length > 0) {
-      setActiveAlertModal(prev => prev || {
-        risk_level: data.risk_level,
-        hazard_type: data.primary_threat || data.active_hazards[0],
-        room_name: activeRoom,
-        combined_score: data.combined_score,
-        summary: `Immediate multi-modal hazard convergence: ${data.active_hazards.join(', ')}`
+  // Handle updates from Vision component
+  const handleVisionUpdate = useCallback((data) => {
+    if (!data) return;
+    if (data.vision) setVisionData(data.vision);
+    if (data.risk) {
+      setRiskData(data.risk);
+      if (data.risk.risk_level === 'CRITICAL' && data.new_alert) {
+        triggerCriticalAlert(data.new_alert);
+      }
+    }
+    if (data.simulation) setSimData(data.simulation);
+  }, []);
+
+  // Handle updates from Audio component
+  const handleAudioUpdate = useCallback((data) => {
+    if (!data) return;
+    if (data.audio) setAudioData(data.audio);
+    if (data.risk) {
+      setRiskData(data.risk);
+      if (data.risk.risk_level === 'CRITICAL' && data.new_alert) {
+        triggerCriticalAlert(data.new_alert);
+      }
+    }
+    if (data.simulation) setSimData(data.simulation);
+  }, []);
+
+  // Handle updates from Simulation component
+  const handleSimUpdate = useCallback((updatedSim) => {
+    setSimData(updatedSim);
+  }, []);
+
+  // Trigger Critical Alert & Browser Push Notification
+  const triggerCriticalAlert = (alertObj) => {
+    setActiveCriticalAlert(alertObj);
+    setRecentAlertsCount(prev => prev + 1);
+
+    // Browser Notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('SENTINEL AI - CRITICAL HAZARD ALERT', {
+        body: `Emergency in ${alertObj.room_name}: ${(alertObj.hazards || []).join(', ')}`,
+        icon: '/vite.svg',
+        tag: alertObj.id
       });
     }
-  }, [activeRoom]);
-
-  const socket = useSentinelSocket({
-    onNewAlert: handleNewAlert,
-    onTelemetryUpdate: handleTelemetryUpdate
-  });
-
-  const fetchStats = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/alerts/stats`);
-      const data = await res.json();
-      setAlertStats(data);
-    } catch (e) {
-      // Ignore
-    }
   };
 
-  useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Master Surveillance Toggle
-  const handleToggleMonitoring = async () => {
-    if (isMonitoring) {
-      // STOP MONITORING
-      camera.stopCamera();
-      mic.stopMicrophone();
-      setIsMonitoring(false);
-      setRiskState(null);
-    } else {
-      // START MONITORING
-      await camera.startCamera();
-      await mic.startMicrophone();
-      setIsMonitoring(true);
-    }
-  };
-
-  // Continuous Surveillance Streaming Loop
-  // Captures camera frame + in-memory audio chunk every 400ms and sends to backend
-  const streamTimerRef = useRef(null);
-
-  useEffect(() => {
-    if (!isMonitoring) {
-      if (streamTimerRef.current) clearInterval(streamTimerRef.current);
-      return;
-    }
-
-    streamTimerRef.current = setInterval(async () => {
-      const frameB64 = camera.captureFrameBase64();
-      const audioB64 = mic.getLatestPcmChunk();
-
-      // If WebSocket connected, stream via WebSocket
-      if (socket.isConnected) {
-        socket.sendPacket(frameB64, audioB64);
-      } else {
-        // Fallback to HTTP POST /fuse
-        try {
-          const res = await fetch(`${API_BASE}/monitor/fuse`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              image_base64: frameB64 || '',
-              pcm_base64: audioB64 || ''
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            handleTelemetryUpdate(data);
-          }
-        } catch (e) {
-          // Socket reconnecting
-        }
-      }
-    }, 450);
-
-    return () => {
-      if (streamTimerRef.current) clearInterval(streamTimerRef.current);
-    };
-  }, [isMonitoring, socket.isConnected, camera, mic, handleTelemetryUpdate]);
-
-  // Alert Acknowledge callback
-  const handleAcknowledgeAlert = async (alertId) => {
-    if (alertId) {
-      try {
-        await fetch(`${API_BASE}/alerts/${alertId}/acknowledge`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ acknowledged_by: "Security Operator" })
-        });
-      } catch (e) {}
-    }
-    setActiveAlertModal(null);
-    fetchStats();
+  // Acknowledge Modal
+  const handleAcknowledgeAlert = async (alertId, actionType) => {
+    setActiveCriticalAlert(null);
+    await dismissCriticalModal().catch(() => {});
+    setRiskData(prev => ({ ...prev, risk_level: 'NORMAL', risk_score: 15.0, hazards: [] }));
+    setRecentAlertsCount(prev => Math.max(0, prev - 1));
   };
 
   return (
-    <div className="min-h-screen bg-[#070B14] text-slate-100 flex flex-col selection:bg-cyan-500/30">
-      {/* Top Navigation */}
+    <div className="min-h-screen bg-navy-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-navy-950">
+      
+      {/* Top Navbar */}
       <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        riskLevel={riskData.risk_level}
         isMonitoring={isMonitoring}
-        onToggleMonitoring={handleToggleMonitoring}
-        currentRiskLevel={riskState?.risk_level || 'NORMAL'}
-        activeRoom={activeRoom}
-        onChangeRoom={setActiveRoom}
-        wsConnected={socket.isConnected}
+        toggleMonitoring={() => setIsMonitoring(!isMonitoring)}
+        roomName={roomName}
+        alertCount={recentAlertsCount}
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Navigation Sidebar */}
-        <Sidebar
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          alertCounts={alertStats}
-          isMonitoring={isMonitoring}
-        />
-
-        {/* Main Content Workspace */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7">
-          {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && (
-            <div className="space-y-5 max-w-7xl mx-auto">
-              {/* Primary Top Grid: Camera Feed + Risk Engine Gauge */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                <div className="lg:col-span-2">
-                  <LiveMonitor
-                    videoRef={camera.videoRef}
-                    isCameraActive={camera.isCameraActive}
-                    hasPermission={camera.hasPermission}
-                    errorMessage={camera.errorMessage}
-                    fps={camera.fps}
-                    onToggleCamera={camera.toggleCamera}
-                    visualDetections={riskState?.visual_evidence}
-                  />
-                </div>
-
-                <div className="lg:col-span-1">
-                  <RiskGauge riskState={riskState} />
-                </div>
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+        
+        {/* TAB 1: LIVE MONITORING DASHBOARD */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            
+            {/* Top Grid: Live Vision + Risk Engine */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Camera Feed Card (7 cols) */}
+              <div className="lg:col-span-7">
+                <LiveCameraCard
+                  isMonitoring={isMonitoring}
+                  onVisionUpdate={handleVisionUpdate}
+                  roomName={roomName}
+                />
               </div>
 
-              {/* Secondary Bottom Grid: Audio Spectrogram + Simulated Environmental Suite */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <AudioSpectrogram
-                  isMicActive={mic.isMicActive}
-                  hasPermission={mic.hasPermission}
-                  errorMessage={mic.errorMessage}
-                  decibels={mic.decibels}
-                  onToggleMic={mic.toggleMicrophone}
-                  getFrequencyData={mic.getFrequencyData}
-                  audioDetections={riskState?.audio_evidence}
-                />
-
-                <EnvironmentalSensors
-                  sensorData={riskState?.environmental_evidence}
-                  onSensorUpdate={(newEnv) => {
-                    setRiskState(prev => prev ? { ...prev, environmental_evidence: newEnv } : null);
-                  }}
+              {/* Risk Engine Card (5 cols) */}
+              <div className="lg:col-span-5 flex flex-col">
+                <RiskEngineCard
+                  riskData={riskData}
+                  visionData={visionData}
+                  audioData={audioData}
+                  simData={simData}
                 />
               </div>
             </div>
-          )}
 
-          {/* Alert History Tab */}
-          {activeTab === 'alerts' && (
-            <div className="max-w-7xl mx-auto">
-              <AlertHistory onRefreshStats={fetchStats} />
+            {/* Bottom Grid: Audio Monitoring + Environmental Simulation */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Audio Monitor Card (6 cols) */}
+              <div className="lg:col-span-6">
+                <AudioMonitorCard
+                  isMonitoring={isMonitoring}
+                  onAudioUpdate={handleAudioUpdate}
+                />
+              </div>
+
+              {/* Environmental Simulation Card (6 cols) */}
+              <div className="lg:col-span-6">
+                <EnvironmentalSimulationCard
+                  simData={simData}
+                  onSimUpdate={handleSimUpdate}
+                />
+              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Environmental Telemetry Tab */}
-          {activeTab === 'sensors' && (
-            <div className="max-w-5xl mx-auto space-y-4">
-              <EnvironmentalSensors
-                sensorData={riskState?.environmental_evidence}
-                onSensorUpdate={(newEnv) => {
-                  setRiskState(prev => prev ? { ...prev, environmental_evidence: newEnv } : null);
-                }}
-              />
-            </div>
-          )}
+        {/* TAB 2: ALERTS HISTORY */}
+        {activeTab === 'alerts' && (
+          <AlertHistoryTab />
+        )}
 
-          {/* Testing Center Tab */}
-          {activeTab === 'testing' && (
-            <div className="max-w-6xl mx-auto">
-              <TestingCenter
-                onSimulateNetworkDrop={socket.simulateNetworkDrop}
-                onSimulateCameraFail={() => camera.stopCamera()}
-                onSimulateMicFail={() => mic.stopMicrophone()}
-              />
-            </div>
-          )}
+        {/* TAB 3: ENVIRONMENTAL SIMULATION */}
+        {activeTab === 'simulation' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <EnvironmentalSimulationCard
+              simData={simData}
+              onSimUpdate={handleSimUpdate}
+            />
+          </div>
+        )}
 
-          {/* Emergency Contacts Tab */}
-          {activeTab === 'contacts' && (
-            <div className="max-w-6xl mx-auto">
-              <EmergencyContacts />
-            </div>
-          )}
+        {/* TAB 4: HAZARD TESTING LAB */}
+        {activeTab === 'testing' && (
+          <TestingLabTab />
+        )}
 
-          {/* Settings Tab */}
-          {activeTab === 'settings' && (
-            <div className="max-w-5xl mx-auto">
-              <SettingsView activeRoom={activeRoom} onChangeRoom={setActiveRoom} />
-            </div>
-          )}
-        </main>
-      </div>
+        {/* TAB 5: CONTACTS & SETTINGS */}
+        {activeTab === 'settings' && (
+          <SettingsTab
+            roomName={roomName}
+            setRoomName={setRoomName}
+          />
+        )}
+      </main>
 
-      {/* Critical Emergency Alert Modal Overlay */}
-      {activeAlertModal && (
-        <CriticalAlertModal
-          alert={activeAlertModal}
-          onAcknowledge={handleAcknowledgeAlert}
-          onDismiss={() => setActiveAlertModal(null)}
-        />
-      )}
+      {/* Fullscreen Critical Hazard Emergency Modal */}
+      <CriticalAlertModal
+        alert={activeCriticalAlert}
+        onAcknowledge={handleAcknowledgeAlert}
+        emergencyContacts={contacts}
+      />
+
+      {/* Footer */}
+      <footer className="w-full border-t border-slate-800/80 py-4 px-6 text-center font-mono text-[11px] text-slate-500">
+        SENTINEL AI • Intelligent Software-Only Indoor Safety Monitoring • Your Room. Your Safety. Your AI Guardian.
+      </footer>
     </div>
   );
 }

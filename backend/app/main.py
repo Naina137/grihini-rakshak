@@ -1,46 +1,25 @@
-"""
-SENTINEL AI - Main Application Entrypoint
-FastAPI application with Lifespan initialization, CORS, WebSocket routing,
-and comprehensive multi-modal safety surveillance APIs.
-"""
 import os
-import logging
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from app.config import settings
-from app.database import db
-from app.api.v1.monitoring import router as monitoring_router
-from app.api.v1.alerts import router as alerts_router
-from app.api.v1.sensors import router as sensors_router
-from app.api.v1.contacts import router as contacts_router
-from app.api.v1.testing import router as testing_router
-from app.api.v1.settings import router as settings_router
+from .config import settings
+from .database import init_db
+from .api.routes_stream import router as stream_router
+from .api.routes_alerts import router as alerts_router
+from .api.routes_simulation import router as sim_router
+from .api.routes_testing import router as test_router
+from .api.routes_auth import router as auth_router
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
-logger = logging.getLogger("sentinel.main")
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Initializing SENTINEL AI Security Services...")
-    await db.init_db()
-    logger.info("SENTINEL AI Engine Ready. Autonomous monitoring operational.")
-    yield
-    logger.info("Shutting down SENTINEL AI Security Services.")
+# Initialize database schema and tables
+init_db()
 
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Your Room. Your Safety. Your AI Guardian. Autonomous Visual & Acoustic Room Safety Surveillance.",
-    version=settings.VERSION,
-    lifespan=lifespan
+    title=settings.PROJECT_NAME,
+    description="Your Room. Your Safety. Your AI Guardian. Software-only intelligent multi-hazard indoor monitoring system.",
+    version=settings.VERSION
 )
 
-# Enable CORS for frontend development and production
+# Enable CORS for local React dev server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,33 +29,33 @@ app.add_middleware(
 )
 
 # Mount API Routers
-app.include_router(monitoring_router, prefix="/api/v1")
-app.include_router(alerts_router, prefix="/api/v1")
-app.include_router(sensors_router, prefix="/api/v1")
-app.include_router(contacts_router, prefix="/api/v1")
-app.include_router(testing_router, prefix="/api/v1")
-app.include_router(settings_router, prefix="/api/v1")
+app.include_router(auth_router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Authentication"])
+app.include_router(stream_router, prefix=f"{settings.API_V1_PREFIX}/stream", tags=["Stream Processing"])
+app.include_router(alerts_router, prefix=f"{settings.API_V1_PREFIX}/alerts", tags=["Alert Management"])
+app.include_router(sim_router, prefix=f"{settings.API_V1_PREFIX}/simulation", tags=["Environmental Simulation"])
+app.include_router(test_router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Verification Lab"])
 
-@app.get("/api/health")
-async def health_check():
+@app.get("/health")
+def health_check():
     return {
         "status": "HEALTHY",
-        "system": settings.APP_NAME,
-        "tagline": settings.TAGLINE,
-        "version": settings.VERSION,
-        "room": settings.DEFAULT_ROOM_NAME,
-        "privacy": "Local Processing Only - No Raw Audio/Video Storage"
+        "vision_engine": "READY",
+        "audio_engine": "READY",
+        "risk_engine": "ONLINE",
+        "simulation_mode": "ACTIVE_UNRESTRICTED"
     }
 
-# Mount static files directory
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
+# Mount Frontend Build if available for single-command full-stack deployment
+frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+else:
     @app.get("/")
-    async def serve_index():
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    def root():
+        return {
+            "app": settings.PROJECT_NAME,
+            "tagline": settings.TAGLINE,
+            "version": settings.VERSION,
+            "status": "OPERATIONAL",
+            "docs_url": "/docs"
+        }
