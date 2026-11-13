@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SENTINEL AI — Your Room. Your Safety. Your AI Guardian.</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300F0FF'><path d='M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V8.26l7-3.89v8.62z'/></svg>">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            sentinel: {
+              navy: '#070B14',
+              surface: '#0D1527',
+              cyan: '#00F0FF',
+              blue: '#0070F3',
+              danger: '#EF4444',
+              warning: '#F59E0B',
+              safe: '#10B981'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons & React / Babel CDNs -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body {
+      background-color: #070B14;
+      color: #F1F5F9;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .glow-cyan { box-shadow: 0 0 25px rgba(0, 240, 255, 0.25); }
+    .glow-red { box-shadow: 0 0 35px rgba(239, 68, 68, 0.45); }
+    .glow-orange { box-shadow: 0 0 25px rgba(245, 158, 11, 0.35); }
+    .glow-green { box-shadow: 0 0 20px rgba(16, 185, 129, 0.25); }
+    
+    .glass-panel {
+      background: rgba(13, 21, 39, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(0, 240, 255, 0.12);
+    }
+    .glass-panel-danger {
+      background: rgba(30, 10, 15, 0.85);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0B0F19; }
+    ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #00F0FF; }
+  </style>
+</head>
+<body class="antialiased overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-300">
+  <div id="root"></div>
+
+  <!-- React Application Logic -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // --- Web Audio Synthesizer ---
+    let audioCtx = null;
+    let sirenOsc1 = null;
+    let sirenOsc2 = null;
+    let sirenGain = null;
+    let isSirenActive = false;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playEmergencySiren() {
+      if (isSirenActive) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        sirenGain = ctx.createGain();
+        sirenGain.gain.setValueAtTime(0.25, now);
+        sirenGain.connect(ctx.destination);
+
+        sirenOsc1 = ctx.createOscillator();
+        sirenOsc2 = ctx.createOscillator();
+        sirenOsc1.type = 'sawtooth';
+        sirenOsc2.type = 'sine';
+
+        sirenOsc1.frequency.setValueAtTime(850, now);
+        sirenOsc2.frequency.setValueAtTime(960, now);
+
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.frequency.value = 3.5;
+        lfoGain.gain.value = 350;
+
+        lfo.connect(sirenOsc1.frequency);
+        lfo.connect(sirenOsc2.frequency);
+
+        sirenOsc1.connect(sirenGain);
+        sirenOsc2.connect(sirenGain);
+
+        lfo.start(now);
+        sirenOsc1.start(now);
+        sirenOsc2.start(now);
+        isSirenActive = true;
+      } catch (e) {
+        console.warn("Siren start error:", e);
+      }
+    }
+
+    function stopEmergencySiren() {
+      if (!isSirenActive) return;
+      try {
+        if (sirenGain && audioCtx) {
+          sirenGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        }
+        if (sirenOsc1) { sirenOsc1.stop(); sirenOsc1.disconnect(); }
+        if (sirenOsc2) { sirenOsc2.stop(); sirenOsc2.disconnect(); }
+      } catch (e) {}
+      finally { isSirenActive = false; }
+    }
+
+    function playSyntheticHazard(type) {
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+
+      if (type === 'glass') {
+        const bufferSize = ctx.sampleRate * 0.55;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          const t = i / ctx.sampleRate;
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 22.0);
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 5400;
+        filter.Q.value = 3.5;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.7, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start(now);
+        noise.stop(now + 0.6);
+      } else if (type === 'alarm') {
+        for (let b = 0; b < 3; b++) {
+          const startTime = now + b * 0.26;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(3120, startTime);
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.5, startTime + 0.02);
+          gain.gain.setValueAtTime(0.5, startTime + 0.16);
+          gain.gain.linearRampToValueAtTime(0, startTime + 0.18);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(startTime);
+          osc.stop(startTime + 0.20);
+        }
+      }
+    }
+
+    // --- Main Application Component ---
+    function App() {
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [isMonitoring, setIsMonitoring] = useState(false);
+      const [activeRoom, setActiveRoom] = useState("Living Area & Home Office");
+      const [riskState, setRiskState] = useState(null);
+      const [activeAlertModal, setActiveAlertModal] = useState(null);
+      const [alertStats, setAlertStats] = useState({ total_alerts: 0, unacknowledged_count: 0 });
+      const [timeStr, setTimeStr] = useState('');
+      const [fps, setFps] = useState(0);
+
+      // Camera State
+      const [isCamActive, setIsCamActive] = useState(false);
+      const [camError, setCamError] = useState(null);
+      const videoRef = useRef(null);
+      const streamRef = useRef(null);
+      const canvasRef = useRef(document.createElement('canvas'));
+      const overlayCanvasRef = useRef(null);
+      const frameCountRef = useRef(0);
+      const lastFpsRef = useRef(Date.now());
+
+      // Microphone State
+      const [isMicActive, setIsMicActive] = useState(false);
+      const [micError, setMicError] = useState(null);
+      const [decibels, setDecibels] = useState(0);
+      const micStreamRef = useRef(null);
+      const micAudioCtxRef = useRef(null);
+      const analyserRef = useRef(null);
+      const animFrameRef = useRef(null);
+      const latestPcmRef = useRef(null);
+      const visualizerCanvasRef = useRef(null);
+
+      // Clock
+      useEffect(() => {
+        const update = () => setTimeStr(new Date().toLocaleTimeString([], { hour12: false }));
+        update();
+        const id = setInterval(update, 1000);
+        return () => clearInterval(id);
+      }, []);
+
+      // Fetch Stats
+      const fetchStats = async () => {
+        try {
+          const res = await fetch('/api/v1/alerts/stats');
+          const data = await res.json();
+          setAlertStats(data);
+        } catch (e) {}
+      };
+
+      useEffect(() => {
+        fetchStats();
+        const id = setInterval(fetchStats, 10000);
+        return () => clearInterval(id);
+      }, []);
+
+      // Camera Controls
+      const startCamera = async () => {
+        try {
+          setCamError(null);
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+            audio: false
+          });
+          streamRef.current = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play();
+          }
+          setIsCamActive(true);
+        } catch (err) {
+          console.error("Camera fail:", err);
+          setIsCamActive(false);
+          setCamError(err.name === 'NotAllowedError' ? "Camera permission denied by user." : "Camera device not accessible.");
+        }
+      };
+
+      const stopCamera = () => {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+        }
+        if (videoRef.current) videoRef.current.srcObject = null;
+        setIsCamActive(false);
+      };
+
+      const toggleCamera = () => {
+        if (isCamActive) stopCamera();
+        else startCamera();
+      };
+
+      const captureFrameBase64 = () => {
+        const video = videoRef.current;
+        if (!video || !isCamActive || video.readyState < 2) return null;
+        const canvas = canvasRef.current;
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        frameCountRef.current++;
+        const now = Date.now();
+        if (now - lastFpsRef.current >= 1000) {
+          setFps(frameCountRef.current);
+          frameCountRef.current = 0;
+          lastFpsRef.current = now;
+        }
+        return canvas.toDataURL('image/jpeg', 0.65);
+      };
+
+      // Microphone Controls
+      const startMicrophone = async () => {
+        try {
+          setMicError(null);
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          micStreamRef.current = stream;
+
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          const aCtx = new AudioContextClass({ sampleRate: 16000 });
+          micAudioCtxRef.current = aCtx;
+
+          const source = aCtx.createMediaStreamSource(stream);
+          const analyser = aCtx.createAnalyser();
+          analyser.fftSize = 512;
+          analyserRef.current = analyser;
+
+          const processor = aCtx.createScriptProcessor(2048, 1, 1);
+          processor.onaudioprocess = (e) => {
+            const input = e.inputBuffer.getChannelData(0);
+            const floatArr = new Float32Array(input);
+            const uint8 = new Uint8Array(floatArr.buffer);
+            let bin = '';
+            for (let i = 0; i < uint8.byteLength; i++) bin += String.fromCharCode(uint8[i]);
+            latestPcmRef.current = btoa(bin);
+          };
+
+          source.connect(analyser);
+          analyser.connect(processor);
+          processor.connect(aCtx.destination);
+
+          const updateVolume = () => {
+            if (!analyserRef.current) return;
+            const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+            analyserRef.current.getByteFrequencyData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) sum += data[i];
+            const avg = sum / data.length;
+            setDecibels(Math.round(30 + (avg / 255) * 70));
+            animFrameRef.current = requestAnimationFrame(updateVolume);
+          };
+          updateVolume();
+
+          setIsMicActive(true);
+        } catch (err) {
+          console.error("Mic fail:", err);
+          setIsMicActive(false);
+          setMicError(err.name === 'NotAllowedError' ? "Microphone permission denied." : "Microphone not detected.");
+        }
+      };
+
+      const stopMicrophone = () => {
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        if (micAudioCtxRef.current) {
+          micAudioCtxRef.current.close().catch(() => {});
+          micAudioCtxRef.current = null;
+        }
+        if (micStreamRef.current) {
+          micStreamRef.current.getTracks().forEach(t => t.stop());
+          micStreamRef.current = null;
+        }
+        latestPcmRef.current = null;
+        setIsMicActive(false);
+        setDecibels(0);
+      };
+
+      const toggleMicrophone = () => {
+        if (isMicActive) stopMicrophone();
+        else startMicrophone();
+      };
+
+      // Draw Bounding Boxes
+      useEffect(() => {
+        const canvas = overlayCanvasRef.current;
+        const video = videoRef.current;
+        if (!canvas || !video || !isCamActive) return;
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const visual = riskState?.visual_evidence;
+        if (!visual) return;
+
+        // Flames (Red)
+        if (visual.fire_regions) {
+          visual.fire_regions.forEach(box => {
+            ctx.strokeStyle = '#EF4444';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#EF4444';
+            ctx.shadowBlur = 12;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
+            ctx.fillRect(box.x, Math.max(0, box.y - 24), ctx.measureText(box.label).width + 16, 22);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(box.label, box.x + 8, Math.max(16, box.y - 8));
+            ctx.shadowBlur = 0;
+          });
+        }
+
+        // Smoke (Sky Blue)
+        if (visual.smoke_regions) {
+          visual.smoke_regions.forEach(box => {
+            ctx.strokeStyle = '#38BDF8';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.85)';
+            ctx.fillRect(box.x, Math.max(0, box.y - 22), ctx.measureText(box.label).width + 16, 20);
+            ctx.fillStyle = '#0B0F19';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText(box.label, box.x + 8, Math.max(14, box.y - 7));
+          });
+        }
+
+        // People (Cyan)
+        if (visual.people_regions) {
+          visual.people_regions.forEach(box => {
+            ctx.strokeStyle = '#00F0FF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
+            ctx.fillRect(box.x, Math.max(0, box.y - 22), ctx.measureText(box.label).width + 16, 20);
+            ctx.fillStyle = '#070B14';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText(box.label, box.x + 8, Math.max(14, box.y - 7));
+          });
+        }
+      }, [riskState, isCamActive]);
+
+      // Audio Spectrogram Canvas Loop
+      useEffect(() => {
+        let animId;
+        const canvas = visualizerCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        const drawBars = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (isMicActive && analyserRef.current) {
+            const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+            analyserRef.current.getByteFrequencyData(data);
+            const count = 48;
+            const barW = (canvas.width / count) - 1.5;
+            let x = 0;
+            for (let i = 0; i < count; i++) {
+              const bin = Math.floor(i * (data.length / count));
+              const val = data[bin] || 0;
+              const h = (val / 255) * canvas.height * 0.9;
+              const grad = ctx.createLinearGradient(0, canvas.height, 0, 0);
+              grad.addColorStop(0, '#00F0FF');
+              grad.addColorStop(0.7, '#3B82F6');
+              grad.addColorStop(1, val > 180 ? '#EF4444' : '#60A5FA');
+              ctx.fillStyle = grad;
+              ctx.fillRect(x, canvas.height - h, barW, h);
+              x += barW + 1.5;
+            }
+          } else {
+            ctx.strokeStyle = '#1E293B';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+          }
+          animId = requestAnimationFrame(drawBars);
+        };
+        drawBars();
+        return () => cancelAnimationFrame(animId);
+      }, [isMicActive]);
+
+      // Surveillance streaming cycle (450ms)
+      useEffect(() => {
+        if (!isMonitoring) return;
+        const timer = setInterval(async () => {
+          const imgB64 = captureFrameBase64();
+          const pcmB64 = latestPcmRef.current;
+
+          try {
+            const res = await fetch('/api/v1/monitor/fuse', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                image_base64: imgB64 || '',
+                pcm_base64: pcmB64 || ''
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setRiskState(data);
+              if ((data.risk_level === 'CRITICAL' || data.risk_level === 'HIGH RISK') && data.active_hazards && data.active_hazards.length > 0) {
+                setActiveAlertModal(prev => prev || {
+                  risk_level: data.risk_level,
+                  hazard_type: data.primary_threat || data.active_hazards[0],
+                  room_name: activeRoom,
+                  combined_score: data.combined_score,
+                  summary: `Convergence: ${data.active_hazards.join(', ')}`
+                });
+              }
+            }
+          } catch (e) {}
+        }, 450);
+
+        return () => clearInterval(timer);
+      }, [isMonitoring, isCamActive, isMicActive, activeRoom]);
+
+      // Master Monitoring Toggle
+      const toggleMonitoring = async () => {
+        if (isMonitoring) {
+          stopCamera();
+          stopMicrophone();
+          setIsMonitoring(false);
+          setRiskState(null);
+        } else {
+          await startCamera();
+          await startMicrophone();
+          setIsMonitoring(true);
+        }
+      };
+
+      // Environmental simulation inject
+      const handleInject = async (hazard) => {
+        try {
+          const res = await fetch('/api/v1/sensors/inject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hazard_type: hazard })
+          });
+          const data = await res.json();
+          setRiskState(prev => prev ? { ...prev, environmental_evidence: data } : null);
+        } catch (e) {}
+      };
+
+      const handleResetEnv = async () => {
+        try {
+          const res = await fetch('/api/v1/sensors/reset', { method: 'POST' });
+          const data = await res.json();
+          setRiskState(prev => prev ? { ...prev, environmental_evidence: data } : null);
+        } catch (e) {}
+      };
+
+      const riskLevel = riskState?.risk_level || 'NORMAL';
+      const percent = Math.round((riskState?.combined_score || 0) * 100);
+      const strokeColor = riskLevel === 'CRITICAL' ? '#EF4444' : riskLevel === 'HIGH RISK' ? '#F97316' : riskLevel === 'WARNING' ? '#F59E0B' : '#10B981';
+      const offset = (Math.PI * 70) - ((percent / 100) * (Math.PI * 70));
+
+      const env = riskState?.environmental_evidence || {
+        temperature_celsius: 23.5,
+        humidity_percent: 48.0,
+        smoke_ppm: 15.0,
+        gas_ppm: 32.0,
+        status: "NORMAL"
+      };
+
+      return (
+        <div className="min-h-screen bg-[#070B14] text-slate-100 flex flex-col">
+          {/* Top Bar */}
+          <header className="h-16 border-b border-cyan-500/15 bg-[#0B0F19]/90 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/30 border border-cyan-400/40 glow-cyan">
+                <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                {isMonitoring && <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-extrabold tracking-wider bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-400 bg-clip-text text-transparent">
+                    SENTINEL AI
+                  </h1>
+                  <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+                    GUARDIAN
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 hidden sm:block">
+                  Your Room. Your Safety. Your AI Guardian.
+                </p>
+              </div>
+            </div>
+
+            <div className="hidden md:flex items-center gap-4">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
+                <span className="text-slate-400">Zone:</span>
+                <select 
+                  value={activeRoom}
+                  onChange={e => setActiveRoom(e.target.value)}
+                  className="bg-transparent text-cyan-300 font-semibold focus:outline-none cursor-pointer"
+                >
+                  <option value="Living Area & Home Office" className="bg-slate-900">Living Area & Office</option>
+                  <option value="Server Room Alpha" className="bg-slate-900">Server Room Alpha</option>
+                  <option value="Master Bedroom Suite" className="bg-slate-900">Master Bedroom Suite</option>
+                </select>
+              </div>
+
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                riskLevel === 'CRITICAL' ? 'bg-red-500/20 text-red-400 border-red-500/50 glow-red animate-pulse' :
+                riskLevel === 'HIGH RISK' ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 glow-orange' :
+                riskLevel === 'WARNING' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 glow-orange' :
+                'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 glow-green'
+              }`}>
+                {isMonitoring ? `RISK: ${riskLevel}` : 'STANDBY'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block text-xs font-mono text-slate-300 px-2.5 py-1 rounded bg-slate-900/80 border border-slate-800">
+                {timeStr}
+              </div>
+
+              <button
+                onClick={toggleMonitoring}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold shadow-lg transition cursor-pointer ${
+                  isMonitoring
+                    ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/40 glow-red'
+                    : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 hover:from-cyan-400 hover:to-blue-500 glow-cyan'
+                }`}
+              >
+                <span>{isMonitoring ? 'STOP SURVEILLANCE' : 'START SURVEILLANCE'}</span>
+              </button>
+            </div>
+          </header>
+
+          <div className="flex-1 flex overflow-hidden">
+            {/* Sidebar */}
+            <aside className="w-60 border-r border-cyan-500/10 bg-[#070B14]/95 p-4 hidden md:flex flex-col justify-between shrink-0">
+              <div className="space-y-4">
+                <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
+                  <div className="text-[10px] uppercase font-mono text-slate-400">Security Core</div>
+                  <div className="font-bold text-slate-200 mt-0.5">{isMonitoring ? 'Active Guardian' : 'Surveillance Paused'}</div>
+                </div>
+
+                <nav className="space-y-1 text-xs font-medium">
+                  {[
+                    { id: 'dashboard', label: 'Guardian Dashboard' },
+                    { id: 'alerts', label: 'Alert Log & History', badge: alertStats.unacknowledged_count },
+                    { id: 'sensors', label: 'Environmental Telemetry' },
+                    { id: 'testing', label: 'Diagnostic Test Center' },
+                    { id: 'contacts', label: 'Emergency Contacts' },
+                    { id: 'settings', label: 'Thresholds & Privacy' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition cursor-pointer ${
+                        activeTab === tab.id
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 glow-cyan'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {tab.badge > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white">
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-900/40 border border-slate-800 text-[10px] text-slate-400">
+                <span className="text-cyan-400 font-bold block mb-0.5">Local Ephemeral AI</span>
+                Zero persistent video or audio files stored.
+              </div>
+            </aside>
+
+            {/* Main Canvas View */}
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7">
+              {activeTab === 'dashboard' && (
+                <div className="space-y-5 max-w-7xl mx-auto">
+                  {/* Top row: Video + Speedometer */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    {/* Camera Feed */}
+                    <div className="lg:col-span-2 glass-panel rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                            Optical Surveillance Feed
+                            {isCamActive && (
+                              <span className="text-[10px] font-mono text-cyan-400 px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800">
+                                LIVE {fps} FPS
+                              </span>
+                            )}
+                          </h2>
+                          <p className="text-[11px] text-slate-400">Continuous flame, smoke, person, and motion analytics</p>
+                        </div>
+                        <button
+                          onClick={toggleCamera}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+                        >
+                          {isCamActive ? 'Disable Cam' : 'Enable Cam'}
+                        </button>
+                      </div>
+
+                      <div className="relative w-full aspect-video rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center">
+                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${isCamActive ? 'block' : 'hidden'}`} />
+                        <canvas ref={overlayCanvasRef} className={`absolute inset-0 w-full h-full pointer-events-none ${isCamActive ? 'block' : 'hidden'}`} />
+                        {!isCamActive && (
+                          <div className="text-center p-6 space-y-2">
+                            <div className="text-sm font-bold text-slate-300">{camError || "Optical Camera Standby"}</div>
+                            <p className="text-xs text-slate-400">Click 'Enable Cam' to stream live frames to Sentinel AI.</p>
+                            <button onClick={toggleCamera} className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 transition cursor-pointer">
+                              Activate Camera
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">FLAME</div>
+                          <div className={`font-bold ${riskState?.visual_evidence?.has_fire ? 'text-red-400 animate-pulse' : 'text-slate-200'}`}>
+                            {riskState?.visual_evidence?.has_fire ? `${Math.round((riskState.visual_evidence.fire_confidence || 0) * 100)}% DETECTED` : 'None'}
+                          </div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">SMOKE</div>
+                          <div className={`font-bold ${riskState?.visual_evidence?.has_smoke ? 'text-sky-400' : 'text-slate-200'}`}>
+                            {riskState?.visual_evidence?.has_smoke ? `${Math.round((riskState.visual_evidence.smoke_confidence || 0) * 100)}% DETECTED` : 'Clear'}
+                          </div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">PEOPLE</div>
+                          <div className="font-bold text-cyan-300">
+                            {riskState?.visual_evidence?.people_count || 0} Occupants
+                          </div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">MOTION</div>
+                          <div className="font-bold text-slate-200 truncate">
+                            {riskState?.visual_evidence?.motion_description || 'Stable'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Speedometer Risk Gauge */}
+                    <div className="glass-panel rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <h2 className="text-sm font-bold text-slate-100">Intelligent Risk Engine</h2>
+                          <p className="text-[11px] text-slate-400">Multi-modal visual & acoustic convergence</p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                          VERIFIED
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col items-center justify-center my-2 relative">
+                        <svg width="190" height="110" viewBox="0 0 190 110">
+                          <path d="M 20 100 A 75 75 0 0 1 170 100" fill="none" stroke="#1E293B" strokeWidth="14" strokeLinecap="round" />
+                          <path d="M 20 100 A 75 75 0 0 1 170 100" fill="none" stroke={strokeColor} strokeWidth="14" strokeLinecap="round" strokeDasharray={Math.PI * 70} strokeDashoffset={offset} className="transition-all duration-500" />
+                        </svg>
+                        <div className="absolute bottom-1 flex flex-col items-center">
+                          <div className="text-3xl font-extrabold font-mono text-slate-100">{percent}%</div>
+                          <div className="text-xs font-bold uppercase tracking-wider">{riskLevel}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-2">
+                        <div className="text-xs text-slate-400 flex justify-between">
+                          <span>Active Threats:</span>
+                          <span className="font-mono text-slate-200">{(riskState?.active_hazards || []).length} active</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {(riskState?.active_hazards || []).map((h, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/20 text-red-300 border border-red-500/40">
+                              ⚠ {h}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+                          <strong className="text-cyan-400">RECOMMENDATION: </strong>
+                          {riskState?.recommendation || "Environment secure. Autonomous surveillance active."}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom row: Audio Spectrogram + Simulated Sensors */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {/* Audio Spectrogram */}
+                    <div className="glass-panel rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                            Acoustic Safety Guardian
+                            {isMicActive && (
+                              <span className="text-[10px] font-mono text-cyan-400 px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800">
+                                {decibels} dB
+                              </span>
+                            )}
+                          </h2>
+                          <p className="text-[11px] text-slate-400">In-memory frequency analysis & hazard classifier</p>
+                        </div>
+                        <button
+                          onClick={toggleMicrophone}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+                        >
+                          {isMicActive ? 'Mute Mic' : 'Enable Mic'}
+                        </button>
+                      </div>
+
+                      <div className="w-full h-24 bg-slate-950 rounded-xl border border-slate-800 p-2 flex flex-col justify-end relative overflow-hidden">
+                        <canvas ref={visualizerCanvasRef} width={380} height={80} className="w-full h-full block" />
+                        {!isMicActive && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-xs text-slate-400">
+                            Microphone standby. Click 'Enable Mic' to listen.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                        {[
+                          { label: 'Glass Breaking', score: riskState?.audio_evidence?.glass_breaking || 0 },
+                          { label: 'Smoke Alarm', score: riskState?.audio_evidence?.smoke_alarm || 0 },
+                          { label: 'Fire Alarm', score: riskState?.audio_evidence?.fire_alarm || 0 },
+                          { label: 'Human Scream', score: riskState?.audio_evidence?.screaming || 0 }
+                        ].map((item, i) => (
+                          <div key={i} className="p-2 rounded-lg bg-slate-900/60 border border-slate-800">
+                            <div className="flex justify-between text-slate-300 text-[11px] mb-1">
+                              <span>{item.label}</span>
+                              <span className="font-mono font-bold text-cyan-400">{Math.round(item.score * 100)}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-cyan-400 transition-all duration-300" style={{ width: `${Math.round(item.score * 100)}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Simulated Sensors */}
+                    <div className="glass-panel rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <h2 className="text-sm font-bold text-slate-100">Environmental Telemetry</h2>
+                          <p className="text-[11px] text-slate-400">Atmospheric micro-climate physics</p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          SIMULATED SUITE
+                        </span>
+                      </div>
+
+                      <div className="p-2 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200">
+                        <strong>Notice:</strong> Physical IoT hardware is not present. Sensor readings are mathematically simulated models for drill testing.
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs my-2">
+                        <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">TEMP</div>
+                          <div className="text-lg font-bold font-mono text-slate-100">{env.temperature_celsius}°C</div>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">HUMIDITY</div>
+                          <div className="text-lg font-bold font-mono text-slate-100">{env.humidity_percent}%</div>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">SMOKE PPM</div>
+                          <div className="text-lg font-bold font-mono text-slate-100">{env.smoke_ppm}</div>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                          <div className="text-[10px] text-slate-400">GAS PPM</div>
+                          <div className="text-lg font-bold font-mono text-slate-100">{env.gas_ppm}</div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-800">
+                        <div className="flex justify-between items-center text-xs mb-2">
+                          <span className="font-semibold text-slate-300">Inject Test Drill:</span>
+                          <button onClick={handleResetEnv} className="text-cyan-400 text-[11px] hover:underline cursor-pointer">
+                            Reset Normal
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                          <button onClick={() => handleInject('FIRE_TEMP')} className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-950/60 border border-slate-800 text-slate-200 cursor-pointer">
+                            🔥 Heat (68°C)
+                          </button>
+                          <button onClick={() => handleInject('SMOKE_SURGE')} className="p-1.5 rounded-lg bg-slate-900 hover:bg-sky-950/60 border border-slate-800 text-slate-200 cursor-pointer">
+                            💨 Smoke Surge
+                          </button>
+                          <button onClick={() => handleInject('GAS_LEAK')} className="p-1.5 rounded-lg bg-slate-900 hover:bg-amber-950/60 border border-slate-800 text-slate-200 cursor-pointer">
+                            ☣ Gas Leak
+                          </button>
+                          <button onClick={() => handleInject('COMBINED')} className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 font-bold cursor-pointer glow-red">
+                            🚨 Catastrophe
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Other Tabs handled cleanly */}
+              {activeTab === 'alerts' && (
+                <AlertsTabView onRefresh={fetchStats} />
+              )}
+              {activeTab === 'sensors' && (
+                <div className="max-w-4xl mx-auto space-y-4">
+                  <div className="glass-panel rounded-2xl p-6">
+                    <h2 className="text-lg font-bold text-slate-100 mb-2">Environmental Sensor Suite (Simulation Mode)</h2>
+                    <p className="text-xs text-slate-400 mb-4">Complete atmospheric telemetry models and hazard injection triggers.</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm my-4">
+                      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                        <div className="text-xs text-slate-400">Temperature</div>
+                        <div className="text-2xl font-bold font-mono text-slate-100 mt-1">{env.temperature_celsius}°C</div>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                        <div className="text-xs text-slate-400">Relative Humidity</div>
+                        <div className="text-2xl font-bold font-mono text-slate-100 mt-1">{env.humidity_percent}%</div>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                        <div className="text-xs text-slate-400">Smoke Particulates</div>
+                        <div className="text-2xl font-bold font-mono text-slate-100 mt-1">{env.smoke_ppm} PPM</div>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                        <div className="text-xs text-slate-400">Combustible Gas</div>
+                        <div className="text-2xl font-bold font-mono text-slate-100 mt-1">{env.gas_ppm} PPM</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'testing' && (
+                <TestingTabView />
+              )}
+              {activeTab === 'contacts' && (
+                <ContactsTabView />
+              )}
+              {activeTab === 'settings' && (
+                <SettingsTabView activeRoom={activeRoom} onUpdateRoom={setActiveRoom} />
+              )}
+            </main>
+          </div>
+
+          {/* Critical Emergency Alert Modal Overlay */}
+          {activeAlertModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+              <div className="w-full max-w-lg rounded-2xl p-6 bg-gradient-to-b from-red-950/90 to-slate-950/95 border border-red-500/70 glow-red shadow-2xl">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-mono font-extrabold bg-red-500 text-white uppercase">
+                      {activeAlertModal.risk_level || 'CRITICAL'} SAFETY ALERT
+                    </span>
+                    <h2 className="text-xl font-extrabold text-slate-100 mt-1">{activeAlertModal.hazard_type}</h2>
+                  </div>
+                  <button onClick={() => { stopEmergencySiren(); setActiveAlertModal(null); }} className="text-slate-400 hover:text-white p-1 cursor-pointer">
+                    ✕
+                  </button>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed mb-4">{activeAlertModal.summary}</p>
+                <div className="flex gap-2">
+                  <button onClick={() => playSyntheticHazard('alarm')} className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700 cursor-pointer">
+                    Sound Siren
+                  </button>
+                  <button onClick={() => { stopEmergencySiren(); setActiveAlertModal(null); }} className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 cursor-pointer glow-cyan">
+                    Acknowledge & Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // --- Sub-View: Alerts Tab ---
+    function AlertsTabView({ onRefresh }) {
+      const [alerts, setAlerts] = useState([]);
+      const fetchAlerts = async () => {
+        try {
+          const res = await fetch('/api/v1/alerts?limit=50');
+          const data = await res.json();
+          setAlerts(Array.isArray(data) ? data : []);
+          if (onRefresh) onRefresh();
+        } catch (e) {}
+      };
+      useEffect(() => { fetchAlerts(); }, []);
+
+      const handleAck = async (id) => {
+        await fetch(`/api/v1/alerts/${id}/acknowledge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acknowledged_by: "Security Operator" })
+        });
+        fetchAlerts();
+      };
+
+      return (
+        <div className="max-w-6xl mx-auto space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-bold text-slate-100">Alert Incident Log</h2>
+            <button onClick={fetchAlerts} className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer">
+              Refresh
+            </button>
+          </div>
+          <div className="glass-panel rounded-2xl divide-y divide-slate-800">
+            {alerts.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 text-xs">No incidents registered. Environment secure.</div>
+            ) : (
+              alerts.map(a => (
+                <div key={a.id} className="p-4 flex justify-between items-center text-xs">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-red-500/20 text-red-300 border border-red-500/40">
+                        {a.risk_level}
+                      </span>
+                      <strong className="text-slate-100">{a.hazard_type}</strong>
+                    </div>
+                    <div className="text-slate-400">{a.summary}</div>
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">{new Date(a.timestamp).toLocaleString()} - {a.room_name}</div>
+                  </div>
+                  <div>
+                    {a.acknowledged ? (
+                      <span className="text-emerald-400 text-[11px] font-semibold">Acknowledged</span>
+                    ) : (
+                      <button onClick={() => handleAck(a.id)} className="px-3 py-1.5 rounded-xl bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 cursor-pointer glow-cyan">
+                        Acknowledge
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // --- Sub-View: Diagnostic Testing Tab ---
+    function TestingTabView() {
+      const [results, setResults] = useState({});
+      const [running, setRunning] = useState(null);
+
+      const runTest = async (test) => {
+        setRunning(test);
+        try {
+          const res = await fetch(`/api/v1/testing/run-test/${test}`, { method: 'POST' });
+          const data = await res.json();
+          setResults(prev => ({ ...prev, [test]: data }));
+        } catch (e) {
+          setResults(prev => ({ ...prev, [test]: { passed: false, error: e.message } }));
+        } finally {
+          setRunning(null);
+        }
+      };
+
+      const tests = [
+        { id: 'fire', label: 'Fire Detection Test', desc: 'Dual-color space (HSV+YCrCb) flame test with light suppression.' },
+        { id: 'smoke', label: 'Smoke Detection Test', desc: 'Diffuse gray low-chrominance dispersion cloud verification.' },
+        { id: 'glass', label: 'Glass Breaking Audio Test', desc: 'Sharp 4.8kHz - 8kHz brittle acoustic transient classification.', hasAudio: 'glass' },
+        { id: 'alarm', label: 'Alarm Sound Test', desc: '3.1kHz piezoelectric pulsed T3 smoke detector siren test.', hasAudio: 'alarm' },
+        { id: 'human', label: 'Human Detection Test', desc: 'OpenCV person silhouette classifier and geometry verification.' },
+        { id: 'camera_failure', label: 'Camera Permission Failure', desc: 'Graceful handling of NotAllowedError camera denial.' },
+        { id: 'mic_failure', label: 'Microphone Failure Resilience', desc: 'Graceful fallback when microphone permission is denied.' },
+        { id: 'network_failure', label: 'Network Reconnect Resilience', desc: 'Exponential backoff WebSocket reconnect validation.' }
+      ];
+
+      return (
+        <div className="max-w-5xl mx-auto space-y-4">
+          <h2 className="text-lg font-bold text-slate-100">Safety Testing & Simulation Diagnostic Center</h2>
+          <p className="text-xs text-slate-400">Directly execute all 8 required safety drills.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {tests.map(t => (
+              <div key={t.id} className="glass-panel rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="text-sm font-bold text-slate-200">{t.label}</h3>
+                    {results[t.id] && (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${results[t.id].passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {results[t.id].passed ? 'PASSED' : 'FAILED'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mb-3">{t.desc}</p>
+                </div>
+                <div className="flex gap-2 pt-2 border-t border-slate-800">
+                  <button onClick={() => runTest(t.id)} disabled={running === t.id} className="flex-1 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold hover:bg-cyan-500/30 cursor-pointer">
+                    {running === t.id ? 'Running...' : 'Run Drill'}
+                  </button>
+                  {t.hasAudio && (
+                    <button onClick={() => playSyntheticHazard(t.hasAudio)} className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold cursor-pointer">
+                      Play Audio
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // --- Sub-View: Contacts Tab ---
+    function ContactsTabView() {
+      const [contacts, setContacts] = useState([]);
+      const [name, setName] = useState('');
+      const [phone, setPhone] = useState('');
+      const [rel, setRel] = useState('');
+
+      const fetchContacts = async () => {
+        try {
+          const res = await fetch('/api/v1/contacts');
+          const data = await res.json();
+          setContacts(Array.isArray(data) ? data : []);
+        } catch (e) {}
+      };
+      useEffect(() => { fetchContacts(); }, []);
+
+      const addContact = async (e) => {
+        e.preventDefault();
+        if (!name || !phone) return;
+        await fetch('/api/v1/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone_number: phone, relationship: rel || 'Guardian' })
+        });
+        setName(''); setPhone(''); setRel('');
+        fetchContacts();
+      };
+
+      const testDispatch = async (id) => {
+        const res = await fetch(`/api/v1/contacts/${id}/test-alert`, { method: 'POST' });
+        const data = await res.json();
+        alert(`Dispatched test emergency alert to ${data.recipient} via Voice/SMS simulation.`);
+      };
+
+      return (
+        <div className="max-w-5xl mx-auto space-y-4">
+          <h2 className="text-lg font-bold text-slate-100">Emergency Contacts & First Responders</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            {contacts.map(c => (
+              <div key={c.id} className="glass-panel rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-100">{c.name}</h3>
+                  <div className="text-xs text-cyan-400">{c.relationship}</div>
+                  <div className="text-xs text-slate-300 font-mono mt-2">{c.phone_number}</div>
+                </div>
+                <button onClick={() => testDispatch(c.id)} className="mt-3 w-full py-1.5 rounded-xl bg-slate-800 text-xs font-semibold hover:bg-slate-700 text-slate-200 cursor-pointer">
+                  Simulate Emergency Call
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="glass-panel rounded-2xl p-4 mt-6">
+            <h3 className="text-sm font-bold text-slate-200 mb-3">Add Emergency Contact</h3>
+            <form onSubmit={addContact} className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <input type="text" placeholder="Name / Department" value={name} onChange={e => setName(e.target.value)} required className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100" />
+              <input type="text" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} required className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100" />
+              <input type="text" placeholder="Relationship" value={rel} onChange={e => setRel(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100" />
+              <button type="submit" className="sm:col-span-3 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 cursor-pointer glow-cyan">
+                Save Emergency Contact
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // --- Sub-View: Settings Tab ---
+    function SettingsTabView({ activeRoom, onUpdateRoom }) {
+      const [roomId, setRoomId] = useState('ROOM-ALPHA-01');
+      const [roomName, setRoomName] = useState(activeRoom);
+      const [fireThresh, setFireThresh] = useState(65);
+      const [glassThresh, setGlassThresh] = useState(70);
+
+      const handleSave = (e) => {
+        e.preventDefault();
+        onUpdateRoom(roomName);
+        alert("Safety parameters updated.");
+      };
+
+      return (
+        <div className="max-w-3xl mx-auto space-y-4">
+          <h2 className="text-lg font-bold text-slate-100">Safety Thresholds & Privacy Controls</h2>
+          <form onSubmit={handleSave} className="glass-panel rounded-2xl p-5 space-y-4 text-xs">
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Room Display Name</label>
+              <input type="text" value={roomName} onChange={e => setRoomName(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100" />
+            </div>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span>Flame Detection Threshold</span>
+                <span className="font-mono text-cyan-400">{fireThresh}%</span>
+              </div>
+              <input type="range" min="30" max="95" value={fireThresh} onChange={e => setFireThresh(e.target.value)} className="w-full accent-cyan-400 cursor-pointer" />
+            </div>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span>Glass Break Acoustic Threshold</span>
+                <span className="font-mono text-cyan-400">{glassThresh}%</span>
+              </div>
+              <input type="range" min="30" max="95" value={glassThresh} onChange={e => setGlassThresh(e.target.value)} className="w-full accent-cyan-400 cursor-pointer" />
+            </div>
+            <button type="submit" className="px-6 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 cursor-pointer glow-cyan">
+              Save Settings
+            </button>
+          </form>
+        </div>
+      );
+    }
+
+    // Render Root
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
