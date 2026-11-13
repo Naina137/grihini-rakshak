@@ -8,14 +8,22 @@ import CriticalAlertModal from './components/CriticalAlertModal';
 import AlertHistoryTab from './components/AlertHistoryTab';
 import TestingLabTab from './components/TestingLabTab';
 import SettingsTab from './components/SettingsTab';
+import HolographicRoom3D from './components/HolographicRoom3D';
+import RoomHazardAnalysisCard from './components/RoomHazardAnalysisCard';
+import VoiceWellnessCard from './components/VoiceWellnessCard';
 import { fetchAlerts, fetchContacts, fetchSimulationStatus, dismissCriticalModal, applySimulationPreset } from './services/api';
 import { audioSynth } from './utils/audioSynth';
+import { translations } from './utils/translations';
 
 export default function App() {
+  const [lang, setLang] = useState('en'); // 'en' | 'hi'
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [roomName, setRoomName] = useState('Living Room - Unit 4B');
+  const [selectedHazardNode, setSelectedHazardNode] = useState(null);
   
+  const t = translations[lang] || translations.en;
+
   // Real-time telemetry state
   const [riskData, setRiskData] = useState({
     risk_level: 'NORMAL',
@@ -31,10 +39,9 @@ export default function App() {
   const [recentAlertsCount, setRecentAlertsCount] = useState(0);
   const [contacts, setContacts] = useState([]);
 
-  // Alert snooze cooldown timestamp (prevents alert from popping right back up after acknowledge)
+  // Alert snooze cooldown timestamp
   const alertSnoozeUntilRef = useRef(0);
 
-  // Load initial contacts, alerts, and simulation status
   useEffect(() => {
     async function init() {
       try {
@@ -56,7 +63,6 @@ export default function App() {
     init();
   }, []);
 
-  // Handle updates from Vision component
   const handleVisionUpdate = useCallback((data) => {
     if (!data) return;
     if (data.vision) setVisionData(data.vision);
@@ -69,7 +75,6 @@ export default function App() {
     if (data.simulation) setSimData(data.simulation);
   }, []);
 
-  // Handle updates from Audio component
   const handleAudioUpdate = useCallback((data) => {
     if (!data) return;
     if (data.audio) setAudioData(data.audio);
@@ -82,15 +87,13 @@ export default function App() {
     if (data.simulation) setSimData(data.simulation);
   }, []);
 
-  // Handle updates from Simulation component
   const handleSimUpdate = useCallback((updatedSim) => {
     setSimData(updatedSim);
   }, []);
 
-  // Trigger Critical Alert & Browser Push Notification (with cooldown guard)
   const triggerCriticalAlert = (alertObj) => {
     if (Date.now() < alertSnoozeUntilRef.current) {
-      return; // Snoozed after user acknowledged
+      return;
     }
 
     setActiveCriticalAlert(alertObj);
@@ -107,24 +110,16 @@ export default function App() {
     }
   };
 
-  // Instant Alert Acknowledgment & Siren Termination
   const handleAcknowledgeAlert = async (alertId, actionType) => {
-    // 1. Immediately silence siren
     audioSynth.stopEmergencySiren();
-
-    // 2. Set 30-second cooldown so modal never re-opens immediately
     alertSnoozeUntilRef.current = Date.now() + 30000;
-
-    // 3. Clear modal state from DOM
     setActiveCriticalAlert(null);
 
-    // 4. Reset simulation to safe Normal Room condition
     try {
       const resetSim = await applySimulationPreset('NORMAL');
       if (resetSim?.readings) setSimData(resetSim.readings);
     } catch (e) {}
 
-    // 5. Reset risk engine state
     setRiskData({
       risk_level: 'NORMAL',
       risk_score: 10.0,
@@ -138,7 +133,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-navy-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-navy-950 font-sans">
+    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-black font-sans antialiased">
       
       {/* Top Navbar */}
       <Navbar
@@ -149,99 +144,148 @@ export default function App() {
         toggleMonitoring={() => setIsMonitoring(!isMonitoring)}
         roomName={roomName}
         alertCount={recentAlertsCount}
+        lang={lang}
+        setLang={setLang}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Main Body */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         
         {/* TAB 1: LIVE MONITORING DASHBOARD */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-fade-in">
             
-            {/* Top Grid: Live Vision + Risk Engine */}
+            {/* Top Grid: Camera & Multi-modal Risk */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Camera Feed Card (7 cols) */}
               <div className="lg:col-span-7">
                 <LiveCameraCard
                   isMonitoring={isMonitoring}
                   onVisionUpdate={handleVisionUpdate}
                   roomName={roomName}
+                  lang={lang}
                 />
               </div>
 
-              {/* Risk Engine Card (5 cols) */}
               <div className="lg:col-span-5 flex flex-col">
                 <RiskEngineCard
                   riskData={riskData}
                   visionData={visionData}
                   audioData={audioData}
                   simData={simData}
+                  lang={lang}
                 />
               </div>
             </div>
 
-            {/* Bottom Grid: Audio Monitoring + Environmental Simulation */}
+            {/* Middle Grid: 3D Holographic Room Model & Comparative Audit */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Audio Monitor Card (6 cols) */}
               <div className="lg:col-span-6">
-                <AudioMonitorCard
-                  isMonitoring={isMonitoring}
-                  onAudioUpdate={handleAudioUpdate}
+                <HolographicRoom3D
+                  lang={lang}
+                  selectedHazard={selectedHazardNode}
+                  onSelectHazard={setSelectedHazardNode}
                 />
               </div>
 
-              {/* Environmental Simulation Card (6 cols) */}
               <div className="lg:col-span-6">
+                <RoomHazardAnalysisCard
+                  lang={lang}
+                />
+              </div>
+            </div>
+
+            {/* Bottom Grid: Audio Monitoring + Voice Wellness + Environmental Sim */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-4">
+                <AudioMonitorCard
+                  isMonitoring={isMonitoring}
+                  onAudioUpdate={handleAudioUpdate}
+                  lang={lang}
+                />
+              </div>
+
+              <div className="lg:col-span-4">
+                <VoiceWellnessCard
+                  lang={lang}
+                />
+              </div>
+
+              <div className="lg:col-span-4">
                 <EnvironmentalSimulationCard
                   simData={simData}
                   onSimUpdate={handleSimUpdate}
+                  lang={lang}
                 />
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: ALERTS HISTORY */}
-        {activeTab === 'alerts' && (
-          <AlertHistoryTab />
-        )}
-
-        {/* TAB 3: ENVIRONMENTAL SIMULATION */}
-        {activeTab === 'simulation' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <EnvironmentalSimulationCard
-              simData={simData}
-              onSimUpdate={handleSimUpdate}
+        {/* TAB 2: 3D ROOM & HAZARD SCANNER */}
+        {activeTab === 'scanner' && (
+          <div className="space-y-6 animate-fade-in">
+            <HolographicRoom3D
+              lang={lang}
+              selectedHazard={selectedHazardNode}
+              onSelectHazard={setSelectedHazardNode}
+            />
+            <RoomHazardAnalysisCard
+              lang={lang}
             />
           </div>
         )}
 
-        {/* TAB 4: HAZARD TESTING LAB */}
-        {activeTab === 'testing' && (
-          <TestingLabTab />
+        {/* TAB 3: VOICE GUARDIAN & STRESS ANALYZER */}
+        {activeTab === 'voice' && (
+          <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
+            <VoiceWellnessCard
+              lang={lang}
+            />
+            <AudioMonitorCard
+              isMonitoring={isMonitoring}
+              onAudioUpdate={handleAudioUpdate}
+              lang={lang}
+            />
+          </div>
         )}
 
-        {/* TAB 5: CONTACTS & SETTINGS */}
-        {activeTab === 'settings' && (
-          <SettingsTab
-            roomName={roomName}
-            setRoomName={setRoomName}
-          />
+        {/* TAB 4: ALERTS HISTORY */}
+        {activeTab === 'alerts' && (
+          <div className="animate-fade-in">
+            <AlertHistoryTab lang={lang} />
+          </div>
+        )}
+
+        {/* TAB 5: ENVIRONMENTAL SIMULATION */}
+        {activeTab === 'simulation' && (
+          <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+            <EnvironmentalSimulationCard
+              simData={simData}
+              onSimUpdate={handleSimUpdate}
+              lang={lang}
+            />
+          </div>
+        )}
+
+        {/* TAB 6: HAZARD TESTING LAB */}
+        {activeTab === 'testing' && (
+          <div className="animate-fade-in">
+            <TestingLabTab lang={lang} />
+          </div>
         )}
       </main>
 
-      {/* Fullscreen Critical Hazard Emergency Modal */}
+      {/* Critical Alert Emergency Modal */}
       <CriticalAlertModal
         alert={activeCriticalAlert}
         onAcknowledge={handleAcknowledgeAlert}
         emergencyContacts={contacts}
+        lang={lang}
       />
 
-      {/* Footer */}
-      <footer className="w-full border-t border-slate-800/80 py-4 px-6 text-center font-mono text-[11px] text-slate-500">
-        SENTINEL AI • Intelligent Software-Only Indoor Safety Monitoring • Your Room. Your Safety. Your AI Guardian.
+      {/* Luxury Footer */}
+      <footer className="w-full border-t border-slate-900 bg-black/80 py-5 px-6 text-center font-mono text-[11px] text-slate-500">
+        SENTINEL AI • {t.tagline} • Software-Only Indoor Safety Grid
       </footer>
     </div>
   );
