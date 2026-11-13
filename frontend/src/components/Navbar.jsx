@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Eye, Activity, Sliders, ShieldAlert, Power, Radio, Volume2, Globe, Box, HeartPulse } from 'lucide-react';
+import { Shield, Eye, Activity, Sliders, ShieldAlert, Power, Radio, Volume2, Globe, Box, HeartPulse, HelpCircle } from 'lucide-react';
 import { audioSynth } from '../utils/audioSynth';
 import { translations } from '../utils/translations';
 
@@ -12,7 +12,8 @@ export default function Navbar({
   roomName,
   alertCount = 0,
   lang = 'en',
-  setLang
+  setLang,
+  onOpenGuide
 }) {
   const [audioTested, setAudioTested] = useState(false);
   const t = translations[lang] || translations.en;
@@ -72,7 +73,7 @@ export default function Navbar({
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-black/95 backdrop-blur-2xl border-b border-cyan-500/25 shadow-2xl">
+    <header className="sticky top-0 z-40 w-full bg-[#030712]/95 backdrop-blur-2xl border-b border-cyan-500/20 shadow-2xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Main Header Bar */}
@@ -80,8 +81,8 @@ export default function Navbar({
           
           {/* Brand Logo & Centered Aligned Tagline */}
           <div className="flex items-center gap-3.5">
-            <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-950 via-slate-900 to-black border border-cyan-400/50 shadow-xl shadow-cyan-500/20">
-              <Shield className="w-7 h-7 text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+            <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 via-cyan-950 to-black border border-amber-400/50 shadow-xl shadow-amber-500/15">
+              <Shield className="w-7 h-7 text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
               {isMonitoring && (
                 <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
@@ -91,22 +92,22 @@ export default function Navbar({
             </div>
 
             <div className="flex flex-col justify-center">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <span className="text-xl sm:text-2xl font-black tracking-tight text-white font-sans">
-                  SENTINEL <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">AI</span>
+                  GRIHINI <span className="bg-gradient-to-r from-amber-400 via-orange-400 to-cyan-400 bg-clip-text text-transparent">RAKSHAK</span>
                 </span>
-                <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-600/60 shadow-sm">
-                  {t.subTitle}
+                <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-500/40 shadow-sm">
+                  {lang === 'hi' ? 'घरेलू AI रक्षक' : 'AI Home Guardian'}
                 </span>
               </div>
-              <div className="text-xs sm:text-[13px] font-medium tracking-wide text-cyan-200/80 mt-0.5 flex items-center gap-1.5">
+              <div className="text-xs sm:text-[13px] font-medium tracking-wide text-slate-300 mt-0.5 flex items-center gap-1.5">
                 <span>{t.tagline}</span>
               </div>
             </div>
           </div>
 
           {/* Desktop Navigation Tabs */}
-          <nav className="hidden xl:flex items-center gap-1.5 bg-navy-950/90 p-1.5 rounded-2xl border border-slate-800 shadow-inner">
+          <nav className="hidden xl:flex items-center gap-1 bg-navy-950/90 p-1.5 rounded-2xl border border-slate-800 shadow-inner">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -116,7 +117,7 @@ export default function Navbar({
                   onClick={() => setActiveTab(item.id)}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold font-mono transition-all transform hover:-translate-y-0.5 ${
                     isActive
-                      ? 'bg-gradient-to-r from-cyan-500/25 to-blue-500/25 text-cyan-300 border border-cyan-500/50 shadow-md shadow-cyan-500/15'
+                      ? 'bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-blue-500/20 text-cyan-300 border border-cyan-500/50 shadow-md shadow-cyan-500/15'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
                   }`}
                 >
@@ -132,14 +133,24 @@ export default function Navbar({
             })}
           </nav>
 
-          {/* Right Action Controls: Language Toggle + Audio Test + Status Pill + Kill Switch */}
-          <div className="flex items-center gap-2.5">
+          {/* Right Action Controls: Welcome Guide + Language Toggle + Audio Test + Status Pill + Kill Switch */}
+          <div className="flex items-center gap-2">
             
+            {/* Guide Button */}
+            <button
+              onClick={onOpenGuide}
+              title={lang === 'hi' ? 'आपदा सुरक्षा गाइड देखें' : 'View Disaster Protection Guide'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-950/30 text-amber-300 hover:bg-amber-950/60 text-xs font-mono font-bold transition-all shadow-md transform hover:-translate-y-0.5 cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">{lang === 'hi' ? 'गाइड' : 'Guide'}</span>
+            </button>
+
             {/* Language Switcher (Hindi / English) */}
             <button
               onClick={toggleLanguage}
               title={t.switchLanguage}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-navy-900/90 text-cyan-300 hover:bg-cyan-950/60 text-xs font-mono font-bold transition-all shadow-md transform hover:-translate-y-0.5"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-navy-900/90 text-cyan-300 hover:bg-cyan-950/60 text-xs font-mono font-bold transition-all shadow-md transform hover:-translate-y-0.5 cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5 text-cyan-400" />
               <span>{t.currentLangLabel}</span>
@@ -149,7 +160,7 @@ export default function Navbar({
             <button
               onClick={handleTestAudio}
               title="Click to test browser sound and unlock audio"
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium transition-all transform hover:-translate-y-0.5 ${
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium transition-all transform hover:-translate-y-0.5 cursor-pointer ${
                 audioTested
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
                   : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:border-cyan-500/50 hover:text-cyan-300'
@@ -166,7 +177,7 @@ export default function Navbar({
             <button
               onClick={toggleMonitoring}
               title={isMonitoring ? "Click to stop monitoring" : "Click to arm AI Guardian monitoring"}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold font-mono transition-all shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold font-mono transition-all shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer ${
                 isMonitoring
                   ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/60 shadow-red-500/10'
                   : 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/60 shadow-cyan-500/10'

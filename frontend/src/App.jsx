@@ -11,16 +11,18 @@ import SettingsTab from './components/SettingsTab';
 import HolographicRoom3D from './components/HolographicRoom3D';
 import RoomHazardAnalysisCard from './components/RoomHazardAnalysisCard';
 import VoiceWellnessCard from './components/VoiceWellnessCard';
+import WelcomeGuideModal from './components/WelcomeGuideModal';
 import { fetchAlerts, fetchContacts, fetchSimulationStatus, dismissCriticalModal, applySimulationPreset } from './services/api';
 import { audioSynth } from './utils/audioSynth';
 import { translations } from './utils/translations';
 
 export default function App() {
-  const [lang, setLang] = useState('en'); // 'en' | 'hi'
+  const [lang, setLang] = useState('hi'); // Default to Hindi as requested, toggleable to English
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [roomName, setRoomName] = useState('Living Room - Unit 4B');
   const [selectedHazardNode, setSelectedHazardNode] = useState(null);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   
   const t = translations[lang] || translations.en;
 
@@ -39,7 +41,6 @@ export default function App() {
   const [recentAlertsCount, setRecentAlertsCount] = useState(0);
   const [contacts, setContacts] = useState([]);
 
-  // Alert snooze cooldown timestamp
   const alertSnoozeUntilRef = useRef(0);
 
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function App() {
 
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
-        new Notification('SENTINEL AI - CRITICAL HAZARD ALERT', {
+        new Notification('GRIHINI RAKSHAK - CRITICAL HAZARD ALERT', {
           body: `Emergency in ${alertObj.room_name}: ${(alertObj.hazards || []).join(', ')}`,
           icon: '/vite.svg',
           tag: alertObj.id
@@ -133,7 +134,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-black font-sans antialiased">
+    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col selection:bg-amber-500 selection:text-black font-sans antialiased">
       
       {/* Top Navbar */}
       <Navbar
@@ -146,11 +147,34 @@ export default function App() {
         alertCount={recentAlertsCount}
         lang={lang}
         setLang={setLang}
+        onOpenGuide={() => setIsGuideOpen(true)}
       />
 
       {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         
+        {/* Welcome Intro Banner for Grihini Rakshak */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-950/30 via-navy-900/60 to-cyan-950/30 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+          <div className="space-y-1">
+            <div className="text-[11px] font-mono font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+              <span>🛡️ {t.welcomeBadge}</span>
+            </div>
+            <h1 className="text-base sm:text-lg font-black text-white">
+              {t.welcomeTitle}
+            </h1>
+            <p className="text-xs sm:text-[13px] text-slate-300 max-w-3xl leading-relaxed">
+              {t.welcomeMessage}
+            </p>
+          </div>
+
+          <button
+            onClick={() => setIsGuideOpen(true)}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold shadow-lg shadow-amber-500/20 transition-all shrink-0 cursor-pointer"
+          >
+            {lang === 'hi' ? 'आपदा गाइड पढ़ें 📖' : 'Read Disaster Guide 📖'}
+          </button>
+        </div>
+
         {/* TAB 1: LIVE MONITORING DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-fade-in">
@@ -283,9 +307,16 @@ export default function App() {
         lang={lang}
       />
 
-      {/* Luxury Footer */}
-      <footer className="w-full border-t border-slate-900 bg-black/80 py-5 px-6 text-center font-mono text-[11px] text-slate-500">
-        SENTINEL AI • {t.tagline} • Software-Only Indoor Safety Grid
+      {/* Welcome Disaster Protection Guide Modal */}
+      <WelcomeGuideModal
+        lang={lang}
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+      />
+
+      {/* Footer */}
+      <footer className="w-full border-t border-slate-900 bg-black/90 py-5 px-6 text-center font-mono text-[11px] text-slate-500">
+        GRIHINI RAKSHAK (गृहिणी रक्षक) • {t.tagline} • Software-Only Indoor Disaster Defense
       </footer>
     </div>
   );
