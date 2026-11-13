@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './components/Navbar';
 import LiveCameraCard from './components/LiveCameraCard';
 import AudioMonitorCard from './components/AudioMonitorCard';
@@ -8,7 +8,8 @@ import CriticalAlertModal from './components/CriticalAlertModal';
 import AlertHistoryTab from './components/AlertHistoryTab';
 import TestingLabTab from './components/TestingLabTab';
 import SettingsTab from './components/SettingsTab';
-import { fetchAlerts, fetchContacts, fetchSimulationStatus, dismissCriticalModal } from './services/api';
+import { fetchAlerts, fetchContacts, fetchSimulationStatus, dismissCriticalModal, applySimulationPreset } from './services/api';
+import { audioSynth } from './utils/audioSynth';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -30,7 +31,10 @@ export default function App() {
   const [recentAlertsCount, setRecentAlertsCount] = useState(0);
   const [contacts, setContacts] = useState([]);
 
-  // Load initial contacts, alerts and simulation status
+  // Alert snooze cooldown timestamp (prevents alert from popping right back up after acknowledge)
+  const alertSnoozeUntilRef = useRef(0);
+
+  // Load initial contacts, alerts, and simulation status
   useEffect(() => {
     async function init() {
       try {
@@ -42,16 +46,12 @@ export default function App() {
 
         if (cRes?.contacts) setContacts(cRes.contacts);
         if (aRes?.alerts) setRecentAlertsCount(aRes.alerts.filter(a => !a.acknowledged).length);
-        if (aRes?.active_critical) setActiveCriticalAlert(aRes.active_critical);
         if (sRes?.readings) setSimData(sRes.readings);
 
-        // Request browser Notification permission for emergency alerts
         if ('Notification' in window && Notification.permission === 'default') {
           Notification.requestPermission();
         }
-      } catch (err) {
-        console.warn('Initial load error:', err);
-      }
+      } catch (err) {}
     }
     init();
   }, []);
@@ -87,31 +87,58 @@ export default function App() {
     setSimData(updatedSim);
   }, []);
 
-  // Trigger Critical Alert & Browser Push Notification
+  // Trigger Critical Alert & Browser Push Notification (with cooldown guard)
   const triggerCriticalAlert = (alertObj) => {
+    if (Date.now() < alertSnoozeUntilRef.current) {
+      return; // Snoozed after user acknowledged
+    }
+
     setActiveCriticalAlert(alertObj);
     setRecentAlertsCount(prev => prev + 1);
 
-    // Browser Notification
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('SENTINEL AI - CRITICAL HAZARD ALERT', {
-        body: `Emergency in ${alertObj.room_name}: ${(alertObj.hazards || []).join(', ')}`,
-        icon: '/vite.svg',
-        tag: alertObj.id
-      });
+      try {
+        new Notification('SENTINEL AI - CRITICAL HAZARD ALERT', {
+          body: `Emergency in ${alertObj.room_name}: ${(alertObj.hazards || []).join(', ')}`,
+          icon: '/vite.svg',
+          tag: alertObj.id
+        });
+      } catch (e) {}
     }
   };
 
-  // Acknowledge Modal
+  // Instant Alert Acknowledgment & Siren Termination
   const handleAcknowledgeAlert = async (alertId, actionType) => {
+    // 1. Immediately silence siren
+    audioSynth.stopEmergencySiren();
+
+    // 2. Set 30-second cooldown so modal never re-opens immediately
+    alertSnoozeUntilRef.current = Date.now() + 30000;
+
+    // 3. Clear modal state from DOM
     setActiveCriticalAlert(null);
-    await dismissCriticalModal().catch(() => {});
-    setRiskData(prev => ({ ...prev, risk_level: 'NORMAL', risk_score: 15.0, hazards: [] }));
+
+    // 4. Reset simulation to safe Normal Room condition
+    try {
+      const resetSim = await applySimulationPreset('NORMAL');
+      if (resetSim?.readings) setSimData(resetSim.readings);
+    } catch (e) {}
+
+    // 5. Reset risk engine state
+    setRiskData({
+      risk_level: 'NORMAL',
+      risk_score: 10.0,
+      hazards: [],
+      recommended_action: 'ENVIRONMENT SECURE - CONTINUOUS GUARDIAN MONITORING ACTIVE',
+      evidence: {}
+    });
+
     setRecentAlertsCount(prev => Math.max(0, prev - 1));
+    dismissCriticalModal().catch(() => {});
   };
 
   return (
-    <div className="min-h-screen bg-navy-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-navy-950">
+    <div className="min-h-screen bg-navy-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-navy-950 font-sans">
       
       {/* Top Navbar */}
       <Navbar

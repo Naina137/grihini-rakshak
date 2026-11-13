@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Volume2, VolumeX, ShieldCheck, PhoneCall, XCircle, Siren } from 'lucide-react';
+import { AlertTriangle, Volume2, VolumeX, ShieldCheck, PhoneCall, XCircle, Siren, Check } from 'lucide-react';
 import { audioSynth } from '../utils/audioSynth';
 import { acknowledgeAlert } from '../services/api';
 
@@ -9,7 +9,6 @@ export default function CriticalAlertModal({
   emergencyContacts = []
 }) {
   const [isMuted, setIsMuted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (alert) {
@@ -36,42 +35,43 @@ export default function CriticalAlertModal({
     }
   };
 
-  const handleAction = async (actionType) => {
-    setIsSubmitting(true);
+  const handleDismiss = (actionType) => {
+    // 1. Instantly kill audio siren
     audioSynth.stopEmergencySiren();
-    try {
-      const notes = actionType === 'FALSE_ALARM' ? 'Flagged as false alarm by resident' : 'Acknowledged in critical interface';
-      await acknowledgeAlert(alert.id, notes);
-      if (onAcknowledge) onAcknowledge(alert.id, actionType);
-    } catch (e) {
-      console.warn('Alert ack error:', e);
-      if (onAcknowledge) onAcknowledge(alert.id, actionType);
-    } finally {
-      setIsSubmitting(false);
+    
+    // 2. Immediately notify parent to clear modal from DOM without any lag
+    if (onAcknowledge) {
+      onAcknowledge(alert.id, actionType);
     }
+    
+    // 3. Fire-and-forget backend acknowledgment
+    try {
+      const notes = actionType === 'FALSE_ALARM' ? 'Flagged as false alarm by resident' : 'Acknowledged & secured in critical interface';
+      acknowledgeAlert(alert.id, notes).catch(() => {});
+    } catch (e) {}
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/90 backdrop-blur-xl animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/95 backdrop-blur-2xl animate-fade-in">
       
       {/* Background Red Warning Strobe */}
-      <div className="absolute inset-0 bg-red-600/10 pointer-events-none animate-pulse-fast" />
+      <div className="absolute inset-0 bg-red-600/15 pointer-events-none animate-pulse-fast" />
 
-      {/* Modal Dialog Card */}
-      <div className="relative w-full max-w-2xl glass-panel-danger rounded-3xl p-6 sm:p-8 border-2 border-red-500 shadow-2xl text-slate-100 overflow-hidden">
+      {/* Modal Card */}
+      <div className="relative w-full max-w-2xl bg-gradient-to-b from-navy-900 via-navy-950 to-navy-950 rounded-3xl p-6 sm:p-8 border-2 border-red-500 shadow-[0_0_60px_rgba(239,68,68,0.4)] text-slate-100 overflow-hidden">
         
-        {/* Top Hazard Beacon */}
+        {/* Top Warning Beacon */}
         <div className="flex items-center justify-between pb-4 border-b border-red-500/30">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-red-500 text-white shadow-lg shadow-red-500/50 animate-bounce">
-              <Siren className="w-7 h-7" />
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 rounded-2xl bg-red-500 text-white shadow-xl shadow-red-500/50 animate-bounce">
+              <Siren className="w-8 h-8" />
             </div>
             <div>
-              <div className="text-xs font-mono font-bold text-red-400 tracking-wider uppercase">
-                EMERGENCY PRIORITY HAZARD ALERT
+              <div className="text-xs font-mono font-black text-red-400 tracking-widest uppercase">
+                CRITICAL SAFETY INCIDENT
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                CRITICAL THREAT IN PROGRESS
+                HAZARD DETECTED IN MONITOR ZONE
               </h2>
             </div>
           </div>
@@ -79,22 +79,22 @@ export default function CriticalAlertModal({
           {/* Siren Mute Toggle */}
           <button
             onClick={handleToggleMute}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-mono font-bold transition-all shadow-md ${
               isMuted
                 ? 'bg-slate-800 text-slate-300 border-slate-700'
-                : 'bg-red-500/30 text-red-200 border-red-400 animate-pulse'
+                : 'bg-red-500/30 text-red-200 border-red-400 animate-pulse shadow-red-500/20'
             }`}
           >
-            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-red-400" />}
+            {isMuted ? <VolumeX className="w-4 h-4 text-slate-400" /> : <Volume2 className="w-4 h-4 text-red-400" />}
             <span>{isMuted ? 'SIREN MUTED' : 'MUTE SIREN'}</span>
           </button>
         </div>
 
-        {/* Incident Summary Card */}
-        <div className="my-5 p-4 rounded-2xl bg-navy-950/80 border border-red-500/40 space-y-3 font-mono">
-          <div className="grid grid-cols-2 gap-2 text-xs">
+        {/* Incident Summary Box */}
+        <div className="my-5 p-4 sm:p-5 rounded-2xl bg-navy-950/90 border border-red-500/40 space-y-3 font-mono">
+          <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <span className="text-slate-400">ROOM / ZONE:</span>
+              <span className="text-slate-400">LOCATION:</span>
               <div className="text-sm font-bold text-white mt-0.5">{alert.room_name || 'Primary Living Space'}</div>
             </div>
             <div>
@@ -105,12 +105,12 @@ export default function CriticalAlertModal({
             </div>
           </div>
 
-          <div>
-            <span className="text-slate-400 text-xs">CONVERGENT HAZARDS IDENTIFIED:</span>
-            <div className="mt-1 space-y-1">
-              {(alert.hazards || ['Unspecified safety hazard']).map((h, i) => (
+          <div className="pt-2 border-t border-slate-800">
+            <span className="text-slate-400 text-xs">TRIGGERED HAZARD(S):</span>
+            <div className="mt-1.5 space-y-1">
+              {(alert.hazards || ['Unspecified anomaly']).map((h, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs font-bold text-red-300">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                  <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
                   <span>{h}</span>
                 </div>
               ))}
@@ -118,26 +118,26 @@ export default function CriticalAlertModal({
           </div>
         </div>
 
-        {/* Emergency Contacts Quick Call */}
+        {/* Emergency Contacts Quick Actions */}
         <div className="mb-6">
           <div className="text-xs font-mono text-slate-400 uppercase mb-2 flex items-center justify-between">
-            <span>AUTOMATIC EMERGENCY DISPATCH TARGETS</span>
-            <span className="text-red-400 font-bold">READY</span>
+            <span>EMERGENCY DISPATCH PROTOCOLS</span>
+            <span className="text-emerald-400 font-bold">READY</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {emergencyContacts.slice(0, 2).map((c, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800"
+                className="flex items-center justify-between p-3 rounded-xl bg-slate-900/70 border border-slate-800"
               >
                 <div>
                   <div className="text-xs font-bold text-white">{c.name}</div>
-                  <div className="text-[10px] text-slate-400">{c.relationship} • {c.phone}</div>
+                  <div className="text-[10px] text-slate-400 font-mono">{c.relationship} • {c.phone}</div>
                 </div>
                 <a
                   href={`tel:${c.phone}`}
-                  className="p-2 rounded-lg bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30"
-                  title="Call Contact"
+                  className="p-2 rounded-xl bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30"
+                  title="Direct Emergency Call"
                 >
                   <PhoneCall className="w-4 h-4" />
                 </a>
@@ -146,24 +146,22 @@ export default function CriticalAlertModal({
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons: Instantly Stops Siren & Dismisses Modal */}
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
           <button
-            onClick={() => handleAction('ACKNOWLEDGE')}
-            disabled={isSubmitting}
-            className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 transition-all"
+            onClick={() => handleDismiss('ACKNOWLEDGE')}
+            className="w-full sm:flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/30 transition-all cursor-pointer"
           >
-            <ShieldCheck className="w-4 h-4" />
-            <span>ACKNOWLEDGE & SECURE</span>
+            <ShieldCheck className="w-5 h-5 text-slate-950" />
+            <span>ACKNOWLEDGE & STOP ALARM</span>
           </button>
 
           <button
-            onClick={() => handleAction('FALSE_ALARM')}
-            disabled={isSubmitting}
-            className="w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-mono text-xs flex items-center justify-center gap-1.5 border border-slate-700 transition-all"
+            onClick={() => handleDismiss('FALSE_ALARM')}
+            className="w-full sm:w-auto py-3.5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-mono text-xs font-bold flex items-center justify-center gap-2 border border-slate-700 transition-all cursor-pointer"
           >
-            <XCircle className="w-4 h-4" />
-            <span>MARK FALSE ALARM</span>
+            <XCircle className="w-4 h-4 text-slate-400" />
+            <span>DISMISS (FALSE ALARM)</span>
           </button>
         </div>
       </div>
