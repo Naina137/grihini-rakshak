@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://grihini-rakshak-1.onrender.com"><img src="https://img.shields.io/badge/LIVE_DEMO-ONLINE-00F0FF?style=for-the-badge&logo=render&logoColor=white" alt="Live Demo" /></a>
   <a href="https://github.com/Naina137/grihini-rakshak"><img src="https://img.shields.io/badge/Release-v1.0.0--production-00F0FF?style=for-the-badge&logo=github&logoColor=black" alt="Release" /></a>
   <a href="https://www.linkedin.com/in/naina-kumari-06373132b"><img src="https://img.shields.io/badge/LinkedIn-Naina%20Kumari-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" /></a>
   <a href="https://github.com/Naina137/grihini-rakshak/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" /></a>
@@ -41,7 +42,8 @@ python run_sentinel.py
 ```
 
 > [!TIP]
-> **Live Local URL:** Open [`http://127.0.0.1:8080`](http://127.0.0.1:8080) in any modern browser (Chrome, Edge, Brave, Safari, Firefox).
+> **🌐 Live Hosted Cloud Deployment:** [`https://grihini-rakshak-1.onrender.com`](https://grihini-rakshak-1.onrender.com)  
+> **💻 Local URL:** Open [`http://127.0.0.1:8080`](http://127.0.0.1:8080) in any modern browser (Chrome, Edge, Brave, Safari, Firefox).
 
 ### 🎬 Interactive Hands-On Feature Tour:
 1. **Welcome Disaster Safety Guide:** Upon entering, an upfront modal outlines the 4 safety pillars for protecting domestic occupants from kitchen hazards, short circuits, and mechanical accidents.
