@@ -6,9 +6,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    host = os.environ.get("HOST", "0.0.0.0")
     print("=" * 65)
-    print("  SENTINEL AI - INDOOR AI SAFETY GUARDIAN")
-    print("  'Your Room. Your Safety. Your AI Guardian.'")
-    print("  FastAPI Server starting on http://127.0.0.1:8080")
+    print("  GRIHINI RAKSHAK (गृहिणी रक्षक) - INDOOR AI SAFETY SENTINEL")
+    print("  'Your Home. Your Family. Your AI Guardian.'")
+    print(f"  FastAPI Server starting on http://{host}:{port}")
     print("=" * 65)
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8080, reload=False)
+    uvicorn.run("app.main:app", host=host, port=port, reload=False)
